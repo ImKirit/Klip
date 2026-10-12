@@ -1,0 +1,26 @@
+[package]
+name = "klip-games"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Game library scan, foreground game detection, anti-cheat protection list and per game profiles for Klip"
+
+[dependencies]
+klip-core = { path = "../klip-core" }
+serde.workspace = true
+serde_json.workspace = true
+
+# Only the features this crate really calls. Deliberately absent: Win32_System_Memory,
+# Win32_System_Diagnostics_Debug (ReadProcessMemory) and Win32_System_ProcessStatus
+# (module enumeration). Leaving them out makes the forbidden calls fail to compile.
+[dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+]

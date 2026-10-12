@@ -1,0 +1,61 @@
+{
+  "name": "valorant-16x9-default-colors",
+  "version": 1,
+  "notes": "Measured 2026-10-10 on 1920x1080 captures, enemy colour red (default), Japanese client. All lengths are fractions of the frame height. Not measured: other aspect ratios, colour blind modes.",
+  "sample_rate_hz": 10.0,
+  "work_ref_height": 720,
+  "hud_x_stretch": 1.0,
+  "colors": {
+    "own_highlight": { "h_min": 48.0, "h_max": 68.0, "s_min": 0.33, "s_max": 0.70, "v_min": 0.72, "v_max": 1.0 },
+    "ally": { "h_min": 148.0, "h_max": 186.0, "s_min": 0.15, "s_max": 0.75, "v_min": 0.35, "v_max": 1.0 },
+    "enemy": { "h_min": 350.0, "h_max": 26.0, "s_min": 0.20, "s_max": 0.85, "v_min": 0.30, "v_max": 1.0 },
+    "white_v_min": 0.80,
+    "white_s_max": 0.15
+  },
+  "feed": {
+    "roi": { "anchor": "right", "dx": 0.0, "y": 0.0796, "w": 0.7130, "h": 0.2315 },
+    "row_height": 0.0315,
+    "row_pitch": 0.0361,
+    "cap_min_run": 0.50,
+    "cap_max_run": 1.20,
+    "cap_min_width": 0.0046,
+    "cap_max_width": 0.0280,
+    "cap_min_height": 0.80,
+    "portrait_width": 0.0537,
+    "row_span": 0.20,
+    "kill_min_span": 0.08,
+    "row_min_fraction": 0.40,
+    "death_cap_right_offset": 0.0194,
+    "death_cap_right_tolerance": 0.0120
+  },
+  "round_banner": {
+    "roi": { "anchor": "center", "dx": -0.1185, "y": 0.1250, "w": 0.2370, "h": 0.1315 },
+    "corner_width": 0.0093,
+    "corner_height": 0.0037,
+    "corner_white_min": 0.45,
+    "corners_required": 3,
+    "white_min": 0.08,
+    "white_max": 0.32,
+    "color_min_fraction": 0.60,
+    "confirm_samples": 2,
+    "cooldown_s": 20.0
+  },
+  "kill_banner": {
+    "roi": { "anchor": "center", "dx": -0.0741, "y": 0.7315, "w": 0.1481, "h": 0.1296 },
+    "white_min_fraction": 0.03,
+    "wait_s": 0.8,
+    "lookback_s": 0.3,
+    "confidence_bonus": 0.2
+  },
+  "tracking": {
+    "confirm_samples": 2,
+    "lost_after_s": 1.0,
+    "match_dx": 0.012,
+    "match_dy_up": 0.085,
+    "match_dy_down": 0.012
+  },
+  "round": {
+    "new_round_after_death_s": 25.0,
+    "idle_reset_s": 150.0
+  }
+}

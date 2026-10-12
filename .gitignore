@@ -1,0 +1,21 @@
+/target/
+**/node_modules/
+**/dist/
+*.mp4
+*.mkv
+*.log
+.DS_Store
+Thumbs.db
+/dist-stage/
+*.klipbuf
+
+# Local only: working instructions, the knowledge vault and drafts. The repo is public.
+CLAUDE.md
+Klip-Vault/
+Claude/deploys/
+Claude/drafts/
+
+# Sound packs and rejected attempts stay local, the six used files are in assets/sounds.
+/assets/sounds/packs/
+/assets/sounds/candidates/
+/assets/sounds/variants/

@@ -1,0 +1,24 @@
+"AppState"
+{
+	"appid"		"1222140"
+	"universe"		"1"
+	"LauncherPath"		"C:\\Program Files (x86)\\Steam\\steam.exe"
+	"name"		"Detroit: Become Human"
+	"StateFlags"		"4"
+	"installdir"		"Detroit Become Human"
+	"LastUpdated"		"1791570863"
+	"SizeOnDisk"		"63077578235"
+	"buildid"		"12158144"
+	"InstalledDepots"
+	{
+		"1222141"
+		{
+			"manifest"		"1234567890123456789"
+			"size"		"63077578235"
+		}
+	}
+	"UserConfig"
+	{
+		"language"		"german"
+	}
+}

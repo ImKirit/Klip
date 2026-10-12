@@ -1,0 +1,19 @@
+[package]
+name = "klip-tray"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "Tray icon, autostart entry and single instance lock for the Klip recorder"
+
+[dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+]

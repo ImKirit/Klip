@@ -1,0 +1,49 @@
+[package]
+name = "klip-app"
+version = "0.1.0"
+edition = "2021"
+publish = false
+default-run = "klip-app"
+description = "Klip library, editor and settings"
+
+# Standalone project: the root workspace excludes this folder.
+[workspace]
+
+[lib]
+name = "klip_app_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "klip-app"
+path = "src/main.rs"
+
+# Test backend for the browser preview. Never part of the shipped app.
+[[bin]]
+name = "klip-devserver"
+path = "src/bin/devserver.rs"
+required-features = ["devserver"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-drag = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+klip-core = { path = "../../crates/klip-core" }
+trash = "5"
+clipboard-win = "5"
+fs4 = "1"
+base64 = "0.22"
+tiny_http = { version = "0.12", optional = true }
+
+[features]
+devserver = ["dep:tiny_http"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4
+strip = true

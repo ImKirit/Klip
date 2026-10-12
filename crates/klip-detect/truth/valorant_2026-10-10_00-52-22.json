@@ -1,0 +1,8 @@
+{
+  "video": "Valorant 2026.10.10 - 00.52.22.24.DVR.mp4",
+  "notes": "Clip C. 1920x1080, 60 fps, enemy colour red, Japanese client. Marked by hand from frames at 2 per second, times are accurate to about 0.3 s. Player is dead and spectating until the round ends. No own kill and no own death in this clip. Other feed rows without the own player: 0.0 to 9.0 s (four rows, one of them a resurrection) and from 54.5 s.",
+  "role": "tuning",
+  "events": [
+    { "t": 4.5, "kind": "round_won" }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "video": "Valorant 2026.10.10 - 00.31.35.23.DVR.mp4",
+  "notes": "Clip B. 1920x1080, 60 fps, enemy colour red, Japanese client. Marked by hand from frames at 2 per second, times are accurate to about 0.3 s. Other feed rows without the own player: 49.5 s and 54.5 s. A red notice (spike carrier down) sits below the timer from about 49.5 to 53.5 s.",
+  "role": "held out for measuring",
+  "events": [
+    { "t": 42.3, "kind": "kill" },
+    { "t": 55.8, "kind": "death" }
+  ]
+}

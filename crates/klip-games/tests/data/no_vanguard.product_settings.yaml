@@ -1,0 +1,6 @@
+dependencies:
+    DirectX:
+        phase: "Succeeded"
+product_install_full_path: "C:/Riot Games/LoR/live"
+settings:
+    vanguard: true
