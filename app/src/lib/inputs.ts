@@ -8,7 +8,7 @@
 import qwertz from "../../../crates/klip-input/layouts/qwertz.json";
 import qwerty from "../../../crates/klip-input/layouts/qwerty.json";
 import type { Range } from "./edit";
-import { t } from "./i18n";
+import { getLang, t } from "./i18n";
 import type { Key } from "./i18n";
 
 interface Rect {
@@ -131,6 +131,37 @@ export interface Geometry {
   mouseBody: Rect | null;
 }
 
+/**
+ * Keys whose name is a word, not a character: [English, German]. They follow the
+ * language of the interface. Every other label stays as the keyboard layout prints it.
+ */
+const WORD_KEYS: Record<string, [string, string]> = {
+  ArrowDown: ["Down", "Runter"],
+  ArrowLeft: ["Left", "Links"],
+  ArrowRight: ["Right", "Rechts"],
+  Backspace: ["Back", "Rück"],
+  CapsLock: ["Caps", "Feststell"],
+  ContextMenu: ["Menu", "Menü"],
+  ControlLeft: ["Ctrl", "Strg"],
+  ControlRight: ["Ctrl", "Strg"],
+  Delete: ["Del", "Entf"],
+  End: ["End", "Ende"],
+  Home: ["Home", "Pos1"],
+  Insert: ["Ins", "Einfg"],
+  PageDown: ["PgDn", "Bild ab"],
+  PageUp: ["PgUp", "Bild auf"],
+  PrintScreen: ["PrtSc", "Druck"],
+  ScrollLock: ["ScrLk", "Rollen"],
+  ShiftLeft: ["Shift", "Umschalt"],
+  ShiftRight: ["Shift", "Umschalt"],
+  Space: ["Space", "Leer"],
+};
+
+export function keyLabel(code: string, label: string, lang = getLang()): string {
+  const words = WORD_KEYS[code];
+  return words ? words[lang === "de" ? 1 : 0] : label;
+}
+
 const MOUSE_W = 2.6;
 const MOUSE_H = 3.6;
 
@@ -144,7 +175,7 @@ export function geometry(config: OverlayConfig): Geometry {
   const keyH = rects.length > 0 ? Math.max(...rects.map((r) => r.y + r.h)) - y0 : 0;
   const elements: Element[] = keys.map((k) => ({
     id: `k${k.id}`,
-    label: k.label,
+    label: keyLabel(k.code, k.label),
     rects: (k.extra ? [k.rect, k.extra] : [k.rect]).map((r) => ({ x: r.x - x0, y: r.y - y0, w: r.w, h: r.h })),
   }));
   let width = keyW;
@@ -262,16 +293,26 @@ const CAP = "#191924";
 const CAP_LINE = "#2A2A3C";
 const CAP_TEXT = "#EDEDF7";
 
-function roundRect(ctx: CanvasRenderingContext2D, r: Rect, unit: number, radius: number) {
-  const gap = unit * 0.05;
+/** The shape of the design: a rectangle with the top right corner cut off, never rounded. */
+function cutRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, cut: number) {
+  const c = Math.min(cut, w / 2, h / 2);
   ctx.beginPath();
-  ctx.roundRect(r.x * unit + gap, r.y * unit + gap, r.w * unit - gap * 2, r.h * unit - gap * 2, radius);
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + w - c, y);
+  ctx.lineTo(x + w, y + c);
+  ctx.lineTo(x + w, y + h);
+  ctx.lineTo(x, y + h);
+  ctx.closePath();
+}
+
+function capPath(ctx: CanvasRenderingContext2D, r: Rect, unit: number) {
+  const gap = unit * 0.05;
+  cutRect(ctx, r.x * unit + gap, r.y * unit + gap, r.w * unit - gap * 2, r.h * unit - gap * 2, unit * 0.18);
 }
 
 export function drawElement(ctx: CanvasRenderingContext2D, el: Element, unit: number, pressed: boolean, colors: OverlayColors) {
-  const radius = unit * 0.14;
   for (const r of el.rects) {
-    roundRect(ctx, r, unit, radius);
+    capPath(ctx, r, unit);
     ctx.fillStyle = pressed ? colors.accent : CAP;
     ctx.fill();
     if (!pressed) {
@@ -298,8 +339,7 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: Element, unit: nu
 }
 
 function drawMouseBody(ctx: CanvasRenderingContext2D, body: Rect, unit: number) {
-  ctx.beginPath();
-  ctx.roundRect(body.x * unit + unit * 0.05, body.y * unit + unit * 0.05, body.w * unit - unit * 0.1, body.h * unit - unit * 0.1, unit * 0.9);
+  cutRect(ctx, body.x * unit + unit * 0.05, body.y * unit + unit * 0.05, body.w * unit - unit * 0.1, body.h * unit - unit * 0.1, unit * 0.5);
   ctx.fillStyle = "#111119";
   ctx.fill();
   ctx.lineWidth = Math.max(1, unit * 0.03);

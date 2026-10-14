@@ -9,7 +9,7 @@ import type { AudioTrack } from "../lib/audio";
 import { effectiveGain, sourceToOutput } from "../lib/edit";
 import type { Range } from "../lib/edit";
 import { buildPlan, copyBlocker, familyFor, FILTER_SCRIPT_FROM, FORMATS, isSoftware, isVideoFormat, outputSize, pickEncoder, planArgs } from "../lib/export";
-import type { AudioMode, ExportOptions, Format, OverlayInput, Plan, Quality, Source } from "../lib/export";
+import type { AudioMode, CameraInput, ExportOptions, Format, OverlayInput, Plan, Quality, Source } from "../lib/export";
 import { dirName, formatBytes, formatDuration, formatNumber, stem } from "../lib/format";
 import { t, tn } from "../lib/i18n";
 import { renderForExport } from "../lib/inputs";
@@ -28,6 +28,8 @@ interface Props {
   edit: EditDoc;
   tracks: AudioTrack[];
   inputs: InputTrack | null;
+  /** The webcam file of the clip, if it has one. */
+  camera: { path: string; offsetMs: number } | null;
   /** `created` is true when a new clip landed in the library. */
   onClose: (created: boolean) => void;
 }
@@ -47,6 +49,7 @@ export function ExportDialog(props: Props) {
   const totalMs = ranges.reduce((sum, r) => sum + r.end_ms - r.start_ms, 0);
   const gains = useMemo(() => effectiveGain(edit.tracks), [edit.tracks]);
   const overlayWanted = edit.input_overlay?.enabled === true && props.inputs !== null;
+  const cameraWanted = props.camera !== null && edit.camera?.enabled === true;
 
   const [format, setFormat] = useState<Format>("mp4");
   const [height, setHeight] = useState<number | null>(null);
@@ -60,6 +63,7 @@ export function ExportDialog(props: Props) {
   const [targetMb, setTargetMb] = useState(10);
   const [allowCopy, setAllowCopy] = useState(true);
   const [withOverlay, setWithOverlay] = useState(overlayWanted);
+  const [withCamera, setWithCamera] = useState(cameraWanted);
   const [name, setName] = useState(stem(clip.path));
   const [dir, setDir] = useState(settings.export_dir || env.export_dir);
   const [encoder, setEncoder] = useState<string | null>(null);
@@ -97,7 +101,12 @@ export function ExportDialog(props: Props) {
   }, [mode, clip.item.ext, source, format, height, fps, quality, codec, audioMode, props.tracks, chosen, edit.tracks, sized, targetMb, allowCopy]);
 
   const overlayActive = mode === "export" && withOverlay && overlayWanted && isVideoFormat(options.format);
-  const blocker = copyBlocker(source, ranges, options, overlayActive);
+  const cameraActive = mode === "export" && withCamera && cameraWanted && isVideoFormat(options.format);
+  const cameraInput: CameraInput | null =
+    cameraActive && props.camera && edit.camera
+      ? { path: props.camera.path, offsetMs: props.camera.offsetMs, corner: edit.camera.corner, sizePercent: edit.camera.size_percent }
+      : null;
+  const blocker = copyBlocker(source, ranges, options, overlayActive || cameraActive);
   const copies = blocker === null && options.allowCopy;
   const family = copies ? null : familyFor(options.format, options.codec);
 
@@ -117,11 +126,11 @@ export function ExportDialog(props: Props) {
   const preview = useMemo(() => {
     try {
       const fake: OverlayInput[] = overlayActive ? [{ path: "overlay.png", x: 0, y: 0, spans: null }] : [];
-      return { plan: buildPlan(source, ranges, options, encoder ?? "libx264", `out.${options.format}`, fake), error: null };
+      return { plan: buildPlan(source, ranges, options, encoder ?? "libx264", `out.${options.format}`, fake, cameraInput), error: null };
     } catch (error) {
       return { plan: null, error: errorText(error) };
     }
-  }, [source, ranges, options, encoder, overlayActive]);
+  }, [source, ranges, options, encoder, overlayActive, cameraInput]);
 
   const run = async () => {
     try {
@@ -145,7 +154,7 @@ export function ExportDialog(props: Props) {
         }
       }
 
-      const plan = buildPlan(source, ranges, options, enc, out.path, overlay);
+      const plan = buildPlan(source, ranges, options, enc, out.path, overlay, cameraInput);
       let script: string | null = null;
       if (plan.filter.length > FILTER_SCRIPT_FROM) {
         script = (await call<{ path: string }>("cache_write", { source: source.path, name: "export_filter.txt", text: plan.filter })).path;
@@ -332,6 +341,12 @@ export function ExportDialog(props: Props) {
                 <div className="field">
                   <span>{t("ex.burnOverlay")}</span>
                   <Toggle checked={withOverlay} label={t("ex.burnOverlay")} onChange={setWithOverlay} />
+                </div>
+              ) : null}
+              {cameraWanted ? (
+                <div className="field">
+                  <span>{t("ex.withCamera")}</span>
+                  <Toggle checked={withCamera} label={t("ex.withCamera")} onChange={setWithCamera} />
                 </div>
               ) : null}
               {format !== "gif" ? (

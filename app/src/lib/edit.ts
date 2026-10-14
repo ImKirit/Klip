@@ -4,7 +4,7 @@
 
 import { DEFAULT_OVERLAY } from "./inputs";
 import type { OverlayConfig } from "./inputs";
-import type { EditDoc, Segment, TrackEdit } from "./types";
+import type { CameraEdit, Corner, EditDoc, Segment, TrackEdit } from "./types";
 
 function between(value: unknown, min: number, max: number, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
@@ -22,6 +22,16 @@ export function normalizeOverlay(raw: Partial<OverlayConfig>): OverlayConfig {
     y: between(raw.y, 0, 1, d.y),
     scale: between(raw.scale, 0.05, 1, d.scale),
     opacity: between(raw.opacity, 0.1, 1, d.opacity),
+  };
+}
+
+const CORNERS: Corner[] = ["top_left", "top_right", "bottom_left", "bottom_right"];
+
+export function normalizeCamera(raw: Partial<CameraEdit>, fallback?: CameraEdit): CameraEdit {
+  return {
+    enabled: typeof raw.enabled === "boolean" ? raw.enabled : (fallback?.enabled ?? true),
+    corner: CORNERS.includes(raw.corner as Corner) ? (raw.corner as Corner) : (fallback?.corner ?? "bottom_right"),
+    size_percent: between(raw.size_percent, 10, 60, fallback?.size_percent ?? 25),
   };
 }
 
@@ -59,6 +69,7 @@ export function normalizeEdit(raw: unknown, durationMs: number, streams: number[
   });
   const edit: EditDoc = { version: 1, segments: segments.length > 0 ? segments : fallback.segments, tracks };
   if (doc.input_overlay && typeof doc.input_overlay === "object") edit.input_overlay = normalizeOverlay(doc.input_overlay);
+  if (doc.camera && typeof doc.camera === "object") edit.camera = normalizeCamera(doc.camera);
   return edit;
 }
 

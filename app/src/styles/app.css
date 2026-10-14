@@ -2386,3 +2386,44 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   word-break: break-all;
   user-select: text;
 }
+
+/* The readout "recorder off" is a button that starts it. */
+.read-button {
+  all: unset;
+  cursor: pointer;
+  padding: 0 18px;
+  border-left: 1px solid var(--line);
+  display: grid;
+  gap: 2px;
+  align-content: center;
+}
+
+.read-button:hover strong {
+  color: var(--ac);
+}
+
+.read-button span {
+  font: 500 9px var(--f-m);
+  letter-spacing: 0.14em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+.read-button strong {
+  font: 700 12px var(--f-m);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-transform: uppercase;
+}
+
+.read-warn {
+  color: var(--rec);
+}
+
+/* The webcam of a clip in its corner of the picture. */
+.camera-layer {
+  display: block;
+  background: #000;
+  outline: 1px solid var(--line);
+}

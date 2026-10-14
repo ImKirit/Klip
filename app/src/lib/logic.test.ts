@@ -3,7 +3,7 @@ import { defaultEdit, effectiveGain, joinAfter, keptDuration, keptRanges, nextPl
 import { buildPlan, copyBlocker, outputSize, planArgs } from "./export";
 import type { ExportOptions, Source } from "./export";
 import { actionLabel, checkHotkeys, comboId, parseCombo, withAllActions } from "./hotkeys";
-import { geometry, mapToOutput, overlayDefault, parseTrack, pressIntervals, DEFAULT_OVERLAY } from "./inputs";
+import { geometry, keyLabel, mapToOutput, overlayDefault, parseTrack, pressIntervals, DEFAULT_OVERLAY } from "./inputs";
 import { allEntries } from "./i18n";
 import { matches, NO_FILTERS, planCleanup, toClip } from "./library";
 import type { LibraryItem } from "./types";
@@ -145,6 +145,22 @@ describe("export", () => {
     expect(plan.filter).toContain("[ov1][2:v]overlay=x=30:y=40:enable='between(t,1.000,1.500)'[ov2]");
     expect(planArgs(plan, "f.txt")).toContain("-/filter_complex");
   });
+
+  it("lays the camera into its corner, shifted by its offset, under the key pictures", () => {
+    const parts = [{ start_ms: 0, end_ms: 4000 }, { start_ms: 6000, end_ms: 8000 }];
+    const camera = { path: "C:\c\a.cam.mp4", offsetMs: 300, corner: "bottom_right" as const, sizePercent: 25 };
+    const plan = buildPlan(source, parts, { ...base, allowCopy: true }, "libx264", "C:\out\a.mp4", [{ path: "base.png", x: 1, y: 2, spans: null }], camera);
+    expect(plan.video).toBe("encode");
+    const args = plan.inputArgs.join(" ");
+    // The first part starts before the camera: seek 0, cut 0.3 s shorter, fill with black.
+    expect(args).toContain("-ss 0.000 -t 3.700 -i C:\c\a.cam.mp4");
+    expect(args).toContain("-ss 5.700 -t 2.000 -i C:\c\a.cam.mp4");
+    expect(plan.filter).toContain("[2:v]tpad=start_mode=add:start_duration=0.300:color=black,scale=480:-2,setsar=1[cam0]");
+    expect(plan.filter).toContain("[cam0][cam1]concat=n=2:v=1:a=0[camj]");
+    expect(plan.filter).toContain("overlay=x=main_w-overlay_w-38:y=main_h-overlay_h-38:eof_action=pass[ovcam]");
+    // The key picture comes after both parts of the video and of the camera.
+    expect(plan.filter).toContain("[ovcam][4:v]overlay=x=1:y=2[ov1]");
+  });
 });
 
 describe("hotkeys", () => {
@@ -210,6 +226,20 @@ describe("inputs", () => {
     const geo = geometry({ ...DEFAULT_OVERLAY, mouse: false, scope: "left_hand" });
     expect(geo.elements).toHaveLength(26);
     expect(geometry({ ...DEFAULT_OVERLAY, mouse: false, scope: "wasd" }).elements).toHaveLength(4);
+  });
+});
+
+describe("key labels", () => {
+  it("names word keys in the language of the interface", () => {
+    expect(keyLabel("ControlLeft", "Strg", "en")).toBe("Ctrl");
+    expect(keyLabel("ControlLeft", "Ctrl", "de")).toBe("Strg");
+    expect(keyLabel("Space", "Leer", "en")).toBe("Space");
+    expect(keyLabel("ShiftRight", "Shift", "de")).toBe("Umschalt");
+  });
+  it("leaves characters as the keyboard layout prints them", () => {
+    expect(keyLabel("KeyY", "Z", "en")).toBe("Z");
+    expect(keyLabel("Semicolon", "Ö", "en")).toBe("Ö");
+    expect(keyLabel("AltRight", "Alt Gr", "en")).toBe("Alt Gr");
   });
 });
 

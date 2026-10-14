@@ -4,6 +4,7 @@
 import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { Camera, LayoutGrid, Scissors, Settings as SettingsIcon, Sparkles, Star, Video } from "lucide-react";
+import { call, errorText } from "../lib/api";
 import { formatBytes, formatDuration } from "../lib/format";
 import { t, tn } from "../lib/i18n";
 import type { Key } from "../lib/i18n";
@@ -109,15 +110,24 @@ function Readouts() {
             <span>{t("hud.game")}</span>
             <strong className="read-game">{status.game ?? "--"}</strong>
           </div>
+          {status.hotkey_problems && status.hotkey_problems.length > 0 ? (
+            <div title={status.hotkey_problems.join("\n")}>
+              <span>{t("hud.keys")}</span>
+              <strong className="read-warn">
+                <i className="dot rec" />
+                {t("hud.keysBroken", status.hotkey_problems.length)}
+              </strong>
+            </div>
+          ) : null}
         </>
       ) : (
-        <div title={t("hud.recorderOffHelp")}>
+        <button type="button" className="read-button" title={t("hud.recorderOffHelp")} onClick={() => void call("recorder_start").catch((e) => window.alert(t("hud.startFailed", errorText(e))))}>
           <span>{t("hud.status")}</span>
           <strong>
             <i className="dot off" />
-            {t("hud.recorderOff")}
+            {t("hud.recorderOff")} / {t("hud.startRecorder")}
           </strong>
-        </div>
+        </button>
       )}
       <div className="read-opt" title={disk ? t("hud.diskHelp", formatBytes(disk.free), formatBytes(disk.total)) : t("hud.diskUnknown")}>
         <span>{t("hud.diskFree")}</span>

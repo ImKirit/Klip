@@ -30,6 +30,8 @@ export interface ClipMeta {
   events: ClipEvent[];
   favorite: boolean;
   tags: string[];
+  /** The webcam as a file of its own next to the clip. */
+  camera?: { file: string; offset_ms: number };
 }
 
 /** One file of the clip folder as the backend reports it. */
@@ -46,6 +48,8 @@ export interface LibraryItem {
   has_edit: boolean;
   has_inputs: boolean;
   thumb: string | null;
+  /** Path of `<clip>.cam.mp4` when the clip has a webcam file. */
+  camera?: string | null;
 }
 
 export type HotkeyAction =
@@ -80,6 +84,9 @@ export interface AudioConfig {
   apps: AppTrack[];
 }
 
+/** Which monitor the recorder takes. The index counts the recorder's list, main monitor is 0. */
+export type MonitorChoice = { type: "primary" } | { type: "game" } | { type: "index"; index: number } | { type: "all" };
+
 /** What the recorder reports over its pipe. */
 export interface RecorderStatus {
   version: string;
@@ -94,6 +101,14 @@ export interface RecorderStatus {
   audio_tracks: string[];
   last_saved?: string;
   game?: string;
+  /** Connected monitors in the order the index counts, such as "1920x1080 at 0,0". */
+  monitors?: string[];
+  /** Names of the connected cameras. */
+  cameras?: string[];
+  /** The camera that is running. */
+  camera?: string;
+  /** Hotkeys Windows refused, one sentence each. */
+  hotkey_problems?: string[];
 }
 
 /** `%APPDATA%\Klip\config.json`, read by the recorder. */
@@ -116,6 +131,10 @@ export interface Config {
   auto_clips: boolean;
   /** Left, top, width, height in pixels of the source. Null means the whole source. */
   region: [number, number, number, number] | null;
+  /** Which monitor is recorded. Missing in files of older versions, then the main one. */
+  monitor?: MonitorChoice;
+  /** The webcam. Missing in files of older versions, then off. */
+  camera?: { enabled: boolean; device: string | null; corner: Corner; size_percent: number };
   /** Language of every visible text: "en" or "de". */
   language: string;
   /** Accent colour as "#RRGGBB", shared by app, tray and overlay. */
@@ -188,6 +207,16 @@ export interface EditDoc {
   tracks: TrackEdit[];
   /** Only present once the overlay was touched. */
   input_overlay?: OverlayConfig;
+  /** Only present once the camera was touched in the editor. */
+  camera?: CameraEdit;
+}
+
+/** How the webcam of a clip is shown in the editor and the export. */
+export interface CameraEdit {
+  enabled: boolean;
+  corner: Corner;
+  /** Width in percent of the picture width. */
+  size_percent: number;
 }
 
 export interface Env {

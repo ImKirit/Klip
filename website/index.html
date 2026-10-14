@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Klip. Clip the last minute</title>
+<meta name="description" content="Klip is a clipping and recording tool for Windows. It buffers your game on the GPU, saves the last minute on a key press and keeps every audio source on its own track. No account, no cloud.">
+<meta property="og:title" content="Klip. Clip the last minute">
+<meta property="og:description" content="Clipping and recording for Windows. Every audio source on its own track. No account, no cloud.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://imkirit.dev/klip/">
+<meta property="og:image" content="https://imkirit.dev/klip/img/bibliothek.png">
+<meta name="theme-color" content="#0a0a0f">
+<link rel="canonical" href="https://imkirit.dev/klip/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/chakra-petch-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="mark" href="#top" aria-label="Klip">Klip<i></i></a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#features" data-de="Funktionen">Features</a>
+      <a href="#tracks" data-de="Tonspuren">Tracks</a>
+      <a href="#anticheat">Anti-Cheat</a>
+      <a href="#keys" data-de="Tasten">Hotkeys</a>
+      <a href="#status" data-de="Stand">Status</a>
+    </nav>
+    <span class="sp"></span>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-lang="en" class="on">EN</button>
+      <button type="button" data-lang="de">DE</button>
+    </div>
+    <a class="btn sm cut" href="https://github.com/ImKirit/Klip">GitHub</a>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <div class="wrap">
+      <p class="lbl"><span class="dot"></span><span data-de="Windows 10 und 11 / früher Build / kein Konto">Windows 10 and 11 / early build / no account</span></p>
+      <h1 data-de-html="Clip die letzte <em>Minute.</em>">Clip the last <em>minute.</em></h1>
+      <p class="lead" data-de-html="Klip puffert dein Spiel im Hintergrund auf der Grafikkarte und speichert auf Tastendruck, was gerade passiert ist. <b>Jede Tonquelle landet auf einer eigenen Spur</b>, also entscheidest du erst im Editor, ob Discord oder Musik in den Clip gehören.">Klip buffers your game in the background on the GPU and saves what just happened on a key press. <b>Every audio source lands on its own track</b>, so you decide in the editor whether Discord or music belongs in the clip.</p>
+      <div class="cta">
+        <a class="btn pri cut" href="https://github.com/ImKirit/Klip" data-de="Quellcode auf GitHub">Source on GitHub</a>
+        <a class="btn cut" href="#status" data-de="Was schon geht">What works today</a>
+        <p class="lbl note" data-de="Noch kein fertiger Download. Im Moment baust du Klip selbst aus dem Quellcode.">No finished download yet. For now you build Klip from source.</p>
+      </div>
+
+      <div class="shot">
+        <p class="lbl cap" data-de="Bibliothek / Testdaten">Library / test data</p>
+        <span class="br tl"></span><span class="br bl"></span><span class="br brt"></span>
+        <div class="frame cut"><img src="img/bibliothek.png" width="1440" height="900" alt="The Klip library: clips grouped by day, with filters and a storage meter" data-de-alt="Die Klip-Bibliothek: Clips nach Tagen gruppiert, mit Filtern und Speicheranzeige"></div>
+      </div>
+
+      <div class="read">
+        <div><strong>0.1<small>%</small></strong><span class="lbl" data-de="CPU im Leerlauf, gemessen">CPU at idle, measured</span></div>
+        <div><strong>16</strong><span class="lbl" data-de="Tonspuren in einer Datei">audio tracks in one file</span></div>
+        <div><strong>3</strong><span class="lbl">Codecs: H.264, HEVC, AV1</span></div>
+        <div><strong>0</strong><span class="lbl" data-de="Konten, Cloud, Telemetrie">accounts, cloud, telemetry</span></div>
+      </div>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="sec"><span data-de="Was Klip macht">What Klip does</span></div>
+      <h2 data-de="Recorder wie ShadowPlay, Bibliothek wie Medal">A recorder like ShadowPlay, a library like Medal</h2>
+      <p class="sub" data-de="Zwei Programme: ein kleiner Recorder im Tray, der kaum Last erzeugt, und eine App für Bibliothek und Schnitt, die nur läuft, wenn du sie öffnest.">Two programs: a small recorder in the tray that costs next to nothing, and an app for library and editing that only runs when you open it.</p>
+
+      <div class="cards">
+        <article class="card cut"><p class="lbl">01 / Buffer</p><h3 data-de="Replay-Puffer">Replay buffer</h3><p data-de="Hält die letzten Sekunden als fertig kodiertes Video im Arbeitsspeicher. Speichern dauert einen Bruchteil einer Sekunde, weil nichts neu kodiert wird.">Keeps the last seconds as encoded video in memory. Saving takes a fraction of a second, because nothing is encoded again.</p></article>
+        <article class="card cut"><p class="lbl">02 / GPU</p><h3 data-de="Hardware-Encoder">Hardware encoding</h3><p data-de="Nutzt den Encoder des Grafiktreibers. Die Bilder bleiben von der Aufnahme bis zum Encoder auf der Grafikkarte, auch beim Verkleinern.">Uses the encoder of the graphics driver. Frames stay on the GPU from capture to encoder, including downscaling.</p></article>
+        <article class="card cut"><p class="lbl">03 / Auto</p><h3 data-de="Auto-Clips für Valorant">Auto clips for Valorant</h3><p data-de="Erkennt Kills, Tode und Rundenenden am aufgenommenen Bild und speichert den Clip von selbst. In der Bibliothek steht der Grund dabei.">Detects kills, deaths and round ends in the captured picture and saves the clip by itself. The library shows the reason.</p></article>
+        <article class="card cut"><p class="lbl">04 / Edit</p><h3 data-de="Editor ohne Verlust">Editor without loss</h3><p data-de="Schneiden, Segmente löschen, Spuren stumm schalten. Deine Schnitte liegen in einer Datei daneben, das Original bleibt unberührt.">Trim, delete segments, mute tracks. Your cuts live in a file next to the clip, the original stays untouched.</p></article>
+        <article class="card cut"><p class="lbl">05 / Input</p><h3 data-de="Tasten als Datenspur">Keys as a data track</h3><p data-de="Tasten und Mausklicks werden neben dem Video gespeichert, nicht ins Bild gebrannt. Ob sie im Clip zu sehen sind, entscheidest du beim Export.">Keys and mouse clicks are stored next to the video, not burned into the picture. Whether they show in the clip is decided at export.</p></article>
+        <article class="card cut"><p class="lbl">06 / Export</p><h3 data-de="Export auf Zielgröße">Export to a target size</h3><p data-de="MP4, WebM, MKV, GIF, MP3 oder WAV, auf Wunsch passend für 10 MB. Ein nur gekürzter Clip wird ohne neues Kodieren exportiert.">MP4, WebM, MKV, GIF, MP3 or WAV, fitted into 10 MB if you want. A clip that was only trimmed is exported without re-encoding.</p></article>
+        <article class="card cut"><p class="lbl">07 / Desktop</p><h3 data-de="Clippen überall">Clip anywhere</h3><p data-de="Der Puffer läuft auch auf dem Desktop. Wer vom Desktop nichts im Puffer haben will, stellt auf &quot;nur im Spiel&quot;.">The buffer runs on the desktop too. If you want nothing of your desktop in it, switch to "only in games".</p></article>
+        <article class="card cut"><p class="lbl">08 / Monitors</p><h3 data-de="Ein Monitor oder alle">One monitor or all</h3><p data-de="Standard ist der Hauptmonitor. Ein anderer, der Monitor des Spiels oder alle nebeneinander in einem Bild sind eine Einstellung entfernt.">The main monitor by default. Another one, the monitor of the game, or all of them side by side in one picture are one setting away.</p></article>
+        <article class="card cut"><p class="lbl">09 / Webcam</p><h3 data-de="Webcam als eigene Datei">Webcam as its own file</h3><p data-de="Die Kamera liegt als eigene Datei neben dem Clip. Ecke und Größe wählst du im Editor, oder du lässt sie weg.">The camera sits as a file of its own next to the clip. Pick corner and size in the editor, or leave it out.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section id="tracks">
+    <div class="wrap">
+      <div class="sec"><span data-de="Der Kern">The core idea</span></div>
+      <h2 data-de="Alles getrennt aufnehmen, später entscheiden">Record everything apart, decide later</h2>
+      <div class="split">
+        <div>
+          <p class="sub" data-de="Jedes Programm, das Ton ausgibt, bekommt von selbst eine eigene Spur in derselben MP4. Spur 1 ist immer der fertige Mix, damit jeder Player das Richtige abspielt.">Every program that plays sound gets a track of its own in the same MP4, found by itself. Track 1 is always the finished mix, so any player plays the right thing.</p>
+          <div class="tracks" aria-hidden="true">
+            <div class="track"><b>01</b><span>Mix</span><i><u class="on"></u><u class="on"></u><u class="on"></u><u class="on"></u><u class="on"></u><u></u><u></u></i></div>
+            <div class="track"><b>02</b><span data-de="Spiel">Game</span><i><u class="on"></u><u class="on"></u><u class="on"></u><u class="on"></u><u></u><u></u><u></u></i></div>
+            <div class="track"><b>03</b><span data-de="Mikrofon">Microphone</span><i><u class="on"></u><u class="on"></u><u></u><u></u><u></u><u></u><u></u></i></div>
+            <div class="track"><b>04</b><span>Discord</span><i><u class="on"></u><u class="on"></u><u class="on"></u><u></u><u></u><u></u><u></u></i></div>
+            <div class="track"><b>05</b><span>Spotify</span><i><u class="on"></u><u></u><u></u><u></u><u></u><u></u><u></u></i></div>
+          </div>
+        </div>
+        <div class="frame cut"><img src="img/editor.png" width="1440" height="900" loading="lazy" alt="The editor with timeline, separate audio tracks and the input overlay" data-de-alt="Der Editor mit Zeitleiste, getrennten Tonspuren und Tastenanzeige"></div>
+      </div>
+
+      <div class="split flip">
+        <div>
+          <h2 style="font-size:clamp(24px,3vw,34px)" data-de="Ein Overlay, das nicht im Spiel steckt">An overlay that is not inside the game</h2>
+          <ul class="list">
+            <li data-de-html="<b>Einblendung oben rechts</b> bei jedem Clip, Auto-Clip und jeder Aufnahme."><b>A notice in the top right</b> for every clip, auto clip and recording.</li>
+            <li data-de-html="<b>Panel zum Verschieben</b> mit Knöpfen für Clip, Aufnahme und Screenshot."><b>A panel you can drag</b> with buttons for clip, recording and screenshot.</li>
+            <li data-de-html="<b>Eigenes Fenster</b> über dem Spiel. Es ist aus der Aufnahme ausgeschlossen und lädt nichts in den Spielprozess."><b>Its own window</b> on top of the game. It is excluded from the recording and loads nothing into the game process.</li>
+          </ul>
+        </div>
+        <div class="frame cut"><img src="img/overlay.png" width="1920" height="1080" loading="lazy" alt="Overlay panel, notices and input overlay, rendered by the overlay's own drawing code" data-de-alt="Overlay-Panel, Einblendungen und Tastenanzeige, gezeichnet vom Overlay selbst"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="anticheat">
+    <div class="wrap">
+      <div class="sec"><span>Anti-Cheat</span></div>
+      <h2 data-de="Klip fasst das Spiel nicht an">Klip never touches the game</h2>
+      <p class="sub" data-de="Gebaut für Spiele mit Kernel-Anti-Cheat. Jedes unbekannte Spiel gilt als geschützt. Ich spiele selbst Valorant, und ein Bann durch mein eigenes Clip-Programm wäre das Schlimmste.">Built for games with kernel anti-cheat. Every unknown game counts as protected. I play Valorant myself, and a ban caused by my own clip tool would be the worst possible outcome.</p>
+      <div class="rules">
+        <div>
+          <h3 data-de="Das macht Klip">Klip does</h3>
+          <ul>
+            <li data-de="Bildschirm von außen aufnehmen (Windows Graphics Capture)">Capture the screen from outside (Windows Graphics Capture)</li>
+            <li data-de="Ton aus der Windows-Audio-Engine lesen">Read audio from the Windows audio engine</li>
+            <li data-de="Eigene Hotkeys über RegisterHotKey anmelden">Register its own hotkeys with RegisterHotKey</li>
+            <li data-de="Das Overlay in einem eigenen Fenster zeichnen">Draw the overlay in a window of its own</li>
+          </ul>
+        </div>
+        <div class="no">
+          <h3 data-de="Das macht Klip nie">Klip never does</h3>
+          <ul>
+            <li data-de="Spielspeicher lesen">Read game memory</li>
+            <li data-de="Code in einen Spielprozess laden">Load code into a game process</li>
+            <li data-de="Eingaben erzeugen">Generate input</li>
+            <li data-de="Mit dem Riot-Client oder seiner lokalen Schnittstelle reden">Talk to the Riot client or its local API</li>
+          </ul>
+        </div>
+      </div>
+      <p class="fine" data-de="Kein Anti-Cheat-Hersteller hat Klip geprüft oder freigegeben. Erkannte Ereignisse werden während eines Matches nie angezeigt, sichtbar ist nur der Hinweis, dass ein Clip gespeichert wurde.">No anti-cheat vendor has reviewed or approved Klip. Detected events are never shown during a match, the only visible effect is the notice that a clip was saved.</p>
+    </div>
+  </section>
+
+  <section id="keys">
+    <div class="wrap">
+      <div class="sec"><span data-de="Standardtasten">Default hotkeys</span></div>
+      <h2 data-de="Eine Taste, und der Clip liegt auf der Platte">One key, and the clip is on disk</h2>
+      <div class="keys">
+        <div><span data-de="Letzte 60 Sekunden speichern">Save the last 60 seconds</span><span><kbd class="k">Alt</kbd> <kbd class="k">S</kbd></span></div>
+        <div><span data-de="Letzte 30 Sekunden speichern">Save the last 30 seconds</span><span><kbd class="k">Ctrl</kbd> <kbd class="k">Shift</kbd> <kbd class="k">F10</kbd></span></div>
+        <div><span data-de="Aufnahme starten oder stoppen">Start or stop a recording</span><span><kbd class="k">Ctrl</kbd> <kbd class="k">Shift</kbd> <kbd class="k">F9</kbd></span></div>
+        <div><span data-de="Marker in der Aufnahme setzen">Set a marker in the recording</span><span><kbd class="k">Ctrl</kbd> <kbd class="k">Shift</kbd> <kbd class="k">F7</kbd></span></div>
+        <div><span>Screenshot</span><span><kbd class="k">Ctrl</kbd> <kbd class="k">Shift</kbd> <kbd class="k">F6</kbd></span></div>
+        <div><span data-de="Overlay-Panel öffnen oder schließen">Open or close the overlay panel</span><span><kbd class="k">Ctrl</kbd> <kbd class="k">Shift</kbd> <kbd class="k">F5</kbd></span></div>
+      </div>
+      <p class="fine" data-de="Alle Tasten lassen sich ändern. Klip sagt dir, wenn eine Kombination schon von einem anderen Programm belegt ist.">Every key can be changed. Klip tells you when a combination is already taken by another program.</p>
+    </div>
+  </section>
+
+  <section id="status">
+    <div class="wrap">
+      <div class="sec"><span data-de="Ehrlicher Stand">Honest state</span></div>
+      <h2 data-de="Ein früher Build von einer Person">An early build by one person</h2>
+      <div class="state">
+        <div class="cut"><h3><span class="dot ok"></span><span data-de="Getestet">Tested</span></h3><p data-de="Aufnahme, Kodieren in drei Codecs, Puffer, Clips, Aufnahmen, Screenshots, getrennte Tonspuren, Tray, Bibliothek, Editor, Export, das Setup-Programm.">Capture, encoding in three codecs, buffer, clips, recordings, screenshots, separate audio tracks, tray, library, editor, export, the setup program.</p></div>
+        <div class="cut"><h3><span class="dot warn"></span><span data-de="Gebaut, im Spiel ungetestet">Built, untried in a game</span></h3><p data-de="Start und Stopp des Puffers durch ein Spiel, das Overlay über einem Vollbildspiel, Auto-Clips auf echtem Valorant-Bild, eine echte Webcam. Die Erkennung fand sechs von sechs Ereignissen in drei echten Clips, das ist zu wenig Material für eine Trefferquote.">Starting and stopping the buffer by a game, the overlay on top of a fullscreen game, auto clips on live Valorant picture, a real webcam. The detector found six of six events in three real clips, which is too little footage for a hit rate.</p></div>
+        <div class="cut"><h3><span class="dot off"></span><span data-de="Fehlt noch">Still missing</span></h3><p data-de="Ein fertiger Download, Software-Kodierung als Rückfall, Profile pro Spiel zum Bearbeiten, weitere Spiele für Auto-Clips, eine Messung der FPS im Spiel.">A finished download, software encoding as a fallback, editable per game profiles, more games for auto clips, a measurement of the frame rate in a game.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="end">
+    <div class="wrap">
+      <p class="lbl" data-de="Selbst bauen">Build it yourself</p>
+      <h2 style="margin-top:10px" data-de="Ein paar Minuten, dann läuft es">A few minutes, then it runs</h2>
+      <pre><b>git clone</b> https://github.com/ImKirit/Klip
+<b>cd</b> Klip/app &amp;&amp; <b>npm install</b> &amp;&amp; <b>cd</b> ..
+<b>powershell</b> -ExecutionPolicy Bypass -File scripts\stage.ps1</pre>
+      <p class="fine" data-de="Du brauchst Rust (MSVC), Node.js und die WebView2-Laufzeit. Heraus kommt ein Setup, das pro Benutzer und ohne Adminrechte installiert.">You need Rust (MSVC), Node.js and the WebView2 runtime. The result is a setup that installs per user, without admin rights.</p>
+      <div class="cta"><a class="btn pri cut" href="https://github.com/ImKirit/Klip" data-de="Zum Repository">Open the repository</a></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="mark" href="#top" aria-label="Klip">Klip<i></i></a>
+    <span class="sp"></span>
+    <a href="https://github.com/ImKirit/Klip">GitHub</a>
+    <a href="/legal/privacy-policy/" data-de="Datenschutz">Privacy</a>
+    <a href="/legal/tos/" data-de="Nutzungsbedingungen">Terms</a>
+    <a href="/">imkirit.dev</a>
+    <p data-de="Diese Seite setzt keine Cookies und lädt nichts von fremden Servern. Die Bilder zeigen die laufende Oberfläche mit erzeugten Testclips. Valorant ist eine Marke von Riot Games, ShadowPlay von NVIDIA, Medal von Medal B.V. Klip steht mit keinem davon in Verbindung.">This page sets no cookies and loads nothing from other servers. The pictures show the running interface with generated test clips. Valorant is a trademark of Riot Games, ShadowPlay of NVIDIA, Medal of Medal B.V. Klip is not affiliated with any of them.</p>
+  </div>
+</footer>
+
+<script>
+// Language switch. English is in the markup, German sits in data attributes next to it.
+(function () {
+  var nodes = document.querySelectorAll("[data-de],[data-de-html],[data-de-alt]");
+  var en = [];
+  nodes.forEach(function (n) { en.push({ html: n.innerHTML, alt: n.getAttribute("alt") }); });
+  function set(lang) {
+    nodes.forEach(function (n, i) {
+      var de = lang === "de";
+      if (n.hasAttribute("data-de-alt")) n.setAttribute("alt", de ? n.getAttribute("data-de-alt") : en[i].alt);
+      else if (n.hasAttribute("data-de-html")) n.innerHTML = de ? n.getAttribute("data-de-html") : en[i].html;
+      else if (de) n.textContent = n.getAttribute("data-de");
+      else n.innerHTML = en[i].html;
+    });
+    document.documentElement.lang = lang;
+    document.querySelectorAll(".lang button").forEach(function (b) { b.classList.toggle("on", b.dataset.lang === lang); });
+    try { localStorage.setItem("klip-site-lang", lang); } catch (e) {}
+  }
+  var saved = null;
+  try { saved = localStorage.getItem("klip-site-lang"); } catch (e) {}
+  var start = saved || ((navigator.language || "").toLowerCase().indexOf("de") === 0 ? "de" : "en");
+  if (start === "de") set("de");
+  document.querySelectorAll(".lang button").forEach(function (b) {
+    b.addEventListener("click", function () { set(b.dataset.lang); });
+  });
+})();
+</script>
+</body>
+</html>

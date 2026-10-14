@@ -101,6 +101,9 @@ const NOT_A_GAME: &[&str] = &[
     "mstsc.exe", "teamviewer.exe", "anydesk.exe", "parsecd.exe", "moonlight.exe", "vmconnect.exe",
     "discord.exe", "zoom.exe", "ms-teams.exe", "teams.exe", "slack.exe",
     "obs64.exe", "powerpnt.exe", "code.exe", "devenv.exe", "windowsterminal.exe", "claude.exe",
+    // Desktop toys and wallpapers from the game stores: they run all day and would put
+    // their name on every clip.
+    "bongocat.exe", "bongo cat.exe", "wallpaper32.exe", "wallpaper64.exe", "desktopmate.exe",
     "klip.exe", "klip-recorder.exe",
 ];
 

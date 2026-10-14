@@ -20,8 +20,8 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const DEFAULT_FFMPEG: &str = r"C:\ffmpeg\bin\ffmpeg.exe";
 const VIDEO_EXT: [&str; 4] = ["mp4", "mkv", "webm", "mov"];
 const IMAGE_EXT: [&str; 3] = ["png", "jpg", "jpeg"];
-/// Files that travel with a clip: metadata, cuts, input track.
-const SIDECARS: [&str; 3] = ["klip.json", "edit.json", "inputs.json"];
+/// Files that travel with a clip: metadata, cuts, input track, webcam.
+const SIDECARS: [&str; 4] = ["klip.json", "edit.json", "inputs.json", "cam.mp4"];
 /// Exports land in this subfolder by default, the library does not list it.
 const EXPORT_FOLDER: &str = "Exporte";
 
@@ -337,7 +337,12 @@ impl Backend {
                 Ok(json!({ "exists": meta.is_some(), "size": meta.map(|m| m.len()).unwrap_or(0) }))
             }
             "unique_path" => unique_path(a),
+            "sounds_list" => sounds_list(),
+            "sound_data" => sound_data(a),
+            "sound_set" => sound_set(a),
+            "sound_reset" => sound_reset(a),
             "recorder_status" => recorder_status(),
+            "recorder_start" => recorder_start(),
             "recorder_reload" => recorder_reload(),
             "cache_write" => cache_write(a),
             "inputs_read" => Ok(read_json(&sidecar(Path::new(str_arg(a, "path")?), "inputs.json"))?.unwrap_or(Value::Null)),
@@ -641,6 +646,10 @@ fn scan_dir(dir: &Path, root: &Path, cache: &Path, depth: u32, items: &mut Vec<V
             }
             continue;
         }
+        // The webcam of a clip belongs to that clip, it is no clip of its own.
+        if name.to_lowercase().ends_with(".cam.mp4") {
+            continue;
+        }
         let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
         let media = if VIDEO_EXT.contains(&ext.as_str()) {
             "video"
@@ -658,6 +667,7 @@ fn scan_dir(dir: &Path, root: &Path, cache: &Path, depth: u32, items: &mut Vec<V
             Ok(None) => (Value::Null, None),
             Err(e) => (Value::Null, Some(e)),
         };
+        let camera = Some(sidecar(&path, "cam.mp4")).filter(|c| c.exists());
         let key = cache_key(&path, &meta);
         let thumb = cache.join(&key).join("thumb.jpg");
         let folder = path.parent().and_then(|p| p.strip_prefix(root).ok()).map(|p| p.to_string_lossy().to_string());
@@ -673,6 +683,7 @@ fn scan_dir(dir: &Path, root: &Path, cache: &Path, depth: u32, items: &mut Vec<V
             "meta_error": meta_error,
             "has_edit": sidecar(&path, "edit.json").exists(),
             "has_inputs": sidecar(&path, "inputs.json").exists(),
+            "camera": camera,
             "thumb": if thumb.exists() { json!(thumb) } else { Value::Null },
         }));
     }
@@ -945,10 +956,33 @@ fn recorder_call(request: Value) -> Option<Value> {
 }
 
 fn recorder_status() -> R {
+    // For pictures of the app that must not show what runs on this machine right now.
+    if env_dir("KLIP_NO_RECORDER").is_some() {
+        return Ok(json!({ "connected": false }));
+    }
     match recorder_call(json!({ "cmd": "status" })) {
         Some(answer) => Ok(json!({ "connected": true, "status": answer.get("status"), "error": answer.get("error") })),
         None => Ok(json!({ "connected": false })),
     }
+}
+
+/// Starts the recorder that sits next to the app, unless one already answers. Without the
+/// recorder there is no buffer and no clip, and nobody should have to know that it is a
+/// program of its own. Does nothing while the settings live in a test folder.
+pub fn recorder_start() -> R {
+    if env_dir("KLIP_DATA_DIR").is_some() || env_dir("KLIP_NO_RECORDER").is_some() {
+        return Ok(json!({ "started": false, "skipped": true }));
+    }
+    if recorder_call(json!({ "cmd": "status" })).is_some() {
+        return Ok(json!({ "started": false, "running": true }));
+    }
+    let exe = std::env::current_exe().map_err(err("find the app"))?;
+    let recorder = exe.parent().map(|d| d.join("klip-recorder.exe")).filter(|p| p.is_file());
+    let Some(recorder) = recorder else {
+        return Err("klip-recorder.exe is not next to the app".into());
+    };
+    Command::new(&recorder).arg("--tray").spawn().map_err(err("start the recorder"))?;
+    Ok(json!({ "started": true }))
 }
 
 /// Tells the recorder to read `config.json` again. Skipped while the settings live in a
@@ -977,6 +1011,81 @@ fn cache_write(a: &Value) -> R {
     std::fs::write(&path, bytes).map_err(err("write cache file"))?;
     Ok(json!({ "path": path }))
 }
+/// The notice sounds, by the names the overlay knows, with the built in file of each.
+const SOUNDS: [(&str, &[u8]); 6] = [
+    ("clip", include_bytes!("../../../assets/sounds/clip.wav")),
+    ("auto", include_bytes!("../../../assets/sounds/auto.wav")),
+    ("rec_start", include_bytes!("../../../assets/sounds/rec_start.wav")),
+    ("rec_stop", include_bytes!("../../../assets/sounds/rec_stop.wav")),
+    ("shot", include_bytes!("../../../assets/sounds/shot.wav")),
+    ("tick", include_bytes!("../../../assets/sounds/tick.wav")),
+];
+
+/// The overlay ignores larger files, so the app does not accept them either.
+const MAX_SOUND_BYTES: u64 = 2 * 1024 * 1024;
+
+fn sounds_dir() -> PathBuf {
+    data_dir().join("sounds")
+}
+
+/// The user's own file for a sound. Fails for a name the overlay does not know, so a
+/// caller can never reach a path outside the sound folder.
+fn own_sound(a: &Value) -> Result<(usize, PathBuf), String> {
+    let name = str_arg(a, "name")?;
+    let at = SOUNDS.iter().position(|(n, _)| *n == name).ok_or(format!("unknown sound '{name}'"))?;
+    Ok((at, sounds_dir().join(format!("{name}.wav"))))
+}
+
+fn is_wav(bytes: &[u8]) -> bool {
+    bytes.len() > 44 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE"
+}
+
+fn sounds_list() -> R {
+    let list: Vec<Value> = SOUNDS
+        .iter()
+        .map(|(name, _)| json!({ "name": name, "custom": sounds_dir().join(format!("{name}.wav")).is_file() }))
+        .collect();
+    Ok(json!({ "dir": sounds_dir(), "sounds": list }))
+}
+
+/// The sound as it will play: the user's own file if there is a usable one, else the
+/// built in one. Base64, for the preview in the settings.
+fn sound_data(a: &Value) -> R {
+    use base64::Engine;
+    let (at, path) = own_sound(a)?;
+    let own = std::fs::read(&path).ok().filter(|b| is_wav(b) && b.len() as u64 <= MAX_SOUND_BYTES);
+    let custom = own.is_some();
+    let bytes = own.unwrap_or_else(|| SOUNDS[at].1.to_vec());
+    Ok(json!({ "base64": base64::engine::general_purpose::STANDARD.encode(bytes), "custom": custom }))
+}
+
+/// Copies a WAV file the user picked into the sound folder. The picked file stays.
+fn sound_set(a: &Value) -> R {
+    let (_, target) = own_sound(a)?;
+    let source = PathBuf::from(str_arg(a, "path")?);
+    let size = std::fs::metadata(&source).map_err(err("read the file"))?.len();
+    if size > MAX_SOUND_BYTES {
+        return Err("the file is larger than 2 MB".into());
+    }
+    let bytes = std::fs::read(&source).map_err(err("read the file"))?;
+    if !is_wav(&bytes) {
+        return Err("this is not a WAV file".into());
+    }
+    std::fs::create_dir_all(sounds_dir()).map_err(err("create the sound folder"))?;
+    std::fs::write(&target, bytes).map_err(err("write the sound"))?;
+    Ok(json!({ "path": target }))
+}
+
+/// Back to the built in sound: removes the copy in the sound folder.
+fn sound_reset(a: &Value) -> R {
+    let (_, target) = own_sound(a)?;
+    match std::fs::remove_file(&target) {
+        Ok(()) => Ok(Value::Null),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Value::Null),
+        Err(e) => Err(format!("remove the sound: {e}")),
+    }
+}
+
 /// Used by the transports to fill in an empty map when a caller sends no arguments.
 pub fn empty_args() -> Value {
     Value::Object(Map::new())

@@ -70,6 +70,16 @@ export interface OverlayInput {
   spans: Range[] | null;
 }
 
+/** The webcam file of a clip, laid over the picture in a corner. */
+export interface CameraInput {
+  path: string;
+  /** Time of the first camera frame on the timeline of the clip. */
+  offsetMs: number;
+  corner: "top_left" | "top_right" | "bottom_left" | "bottom_right";
+  /** Width in percent of the output width. */
+  sizePercent: number;
+}
+
 export interface Plan {
   /** Everything up to and including the inputs. */
   inputArgs: string[];
@@ -191,7 +201,7 @@ function withSuffix(path: string, suffix: string): string {
  * The full ffmpeg call. `encoder` is the tested encoder for the codec family of the
  * format, it is ignored where the video is copied or there is none.
  */
-export function buildPlan(source: Source, ranges: Range[], o: ExportOptions, encoder: string | null, outPath: string, overlay: OverlayInput[] = []): Plan {
+export function buildPlan(source: Source, ranges: Range[], o: ExportOptions, encoder: string | null, outPath: string, overlay: OverlayInput[] = [], camera: CameraInput | null = null): Plan {
   if (ranges.length === 0) throw new Error(t("ex.nothingLeft"));
   const totalMs = ranges.reduce((sum, r) => sum + r.end_ms - r.start_ms, 0);
   const warnings: string[] = [];
@@ -201,7 +211,7 @@ export function buildPlan(source: Source, ranges: Range[], o: ExportOptions, enc
   const tracks = o.format === "gif" || o.audioMode === "none" ? [] : o.tracks.filter((t) => source.audio.some((a) => a.stream === t.stream));
   if (audioOnly && tracks.length === 0) throw new Error(t("ex.noTrackChosen"));
 
-  const copyVideo = hasVideo && o.allowCopy && copyBlocker(source, ranges, o, overlay.length > 0) === null;
+  const copyVideo = hasVideo && o.allowCopy && copyBlocker(source, ranges, o, overlay.length > 0 || camera !== null) === null;
   const audioCodecOf = (stream: number) => source.audio.find((a) => a.stream === stream)?.codec ?? "";
   const copyAudio =
     copyVideo &&
@@ -213,6 +223,19 @@ export function buildPlan(source: Source, ranges: Range[], o: ExportOptions, enc
   // encoding, exact to the frame.
   let args: string[] = [];
   for (const r of ranges) args.push("-ss", seconds(r.start_ms), "-t", seconds(r.end_ms - r.start_ms), "-i", source.path);
+  // The camera is cut the same way, shifted by its offset. Where it starts after a kept
+  // part begins, the gap is filled with black.
+  const useCamera = camera !== null && hasVideo && !audioOnly;
+  const camPads: number[] = [];
+  if (useCamera) {
+    for (const r of ranges) {
+      const at = r.start_ms - camera.offsetMs;
+      const pad = Math.max(0, -at);
+      camPads.push(pad);
+      args.push("-ss", seconds(Math.max(0, at)), "-t", seconds(Math.max(40, r.end_ms - r.start_ms - pad)), "-i", camera.path);
+    }
+  }
+  const pictureBase = ranges.length * (useCamera ? 2 : 1);
 
   const filters: string[] = [];
   const n = ranges.length;
@@ -235,15 +258,35 @@ export function buildPlan(source: Source, ranges: Range[], o: ExportOptions, enc
       if (outHeight !== source.height) steps.push(`scale=-2:${outHeight}`);
     }
     let head = joined("v", "v:0", "vc");
-    if (overlay.length > 0) {
+    if (overlay.length > 0 || useCamera) {
       filters.push(`${head}${steps.length > 0 ? steps.join(",") : "null"}[ov0]`);
       steps.length = 0;
+      head = "[ov0]";
+    }
+    if (useCamera) {
+      const width = outputSize(source, o).width;
+      const camW = Math.max(32, Math.round((width * camera.sizePercent) / 100 / 2) * 2);
+      const margin = Math.round(width * 0.02);
+      ranges.forEach((_, i) => {
+        const pad = camPads[i] > 0 ? `tpad=start_mode=add:start_duration=${seconds(camPads[i])}:color=black,` : "";
+        filters.push(`[${n + i}:v]${pad}scale=${camW}:-2,setsar=1[cam${i}]`);
+      });
+      const cam = n === 1 ? "[cam0]" : "[camj]";
+      if (n > 1) filters.push(`${ranges.map((_, i) => `[cam${i}]`).join("")}concat=n=${n}:v=1:a=0[camj]`);
+      const x = camera.corner.endsWith("left") ? `${margin}` : `main_w-overlay_w-${margin}`;
+      const y = camera.corner.startsWith("top") ? `${margin}` : `main_h-overlay_h-${margin}`;
+      filters.push(`${head}${cam}overlay=x=${x}:y=${y}:eof_action=pass[ovcam]`);
+      head = "[ovcam]";
+    }
+    if (overlay.length > 0) {
+      let at = head;
       overlay.forEach((picture, i) => {
         args.push("-i", picture.path);
         const lit = picture.spans === null ? "" : `:enable='${picture.spans.map((s) => `between(t,${seconds(s.start_ms)},${seconds(s.end_ms)})`).join("+")}'`;
-        filters.push(`[ov${i}][${n + i}:v]overlay=x=${picture.x}:y=${picture.y}${lit}[ov${i + 1}]`);
+        filters.push(`${at}[${pictureBase + i}:v]overlay=x=${picture.x}:y=${picture.y}${lit}[ov${i + 1}]`);
+        at = `[ov${i + 1}]`;
       });
-      head = `[ov${overlay.length}]`;
+      head = at;
     }
     if (o.format === "gif") {
       filters.push(`${head}${[...steps, "split[g1][g2]"].join(",")}`, "[g1]palettegen=stats_mode=diff[pal]", "[g2][pal]paletteuse=dither=bayer:bayer_scale=4[v]");

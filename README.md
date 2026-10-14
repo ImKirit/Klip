@@ -38,12 +38,13 @@ ban caused by my own clip tool would be the worst possible outcome.
 There is no release download yet, you build Klip yourself. That takes a few minutes, see
 [Install](#install).
 
-1. **Start `klip-recorder.exe`.** A dot appears in the tray next to the clock. Grey means it
-   waits for a game, green means the buffer runs, red means a recording runs.
+1. **Open Klip.** The app starts the recorder, and a dot appears in the tray next to the
+   clock. Green means the buffer runs, red means a recording runs.
 
-2. **Start a game.** Klip finds it through your Steam, Epic and Riot libraries and starts
-   buffering on the monitor the game is on. When the game ends, the buffer stops and nothing
-   of your desktop was ever in it.
+2. **Play, or do anything else.** The buffer runs all the time on your main monitor, on the
+   desktop too. Klip finds your games through your Steam, Epic and Riot libraries and files
+   their clips under the name of the game. If you want nothing of your desktop in the
+   buffer, switch to "only while a game is recognised".
 
 3. **Press `Alt+S` or `Alt+F10`.** The last 60 seconds are written to `Klip\<Game>` in your
    video folder in a fraction of a second, because nothing is encoded again. A short notice
@@ -69,8 +70,12 @@ There is no release download yet, you build Klip yourself. That takes a few minu
 - **Manual recording** with pause and markers. Written as fragmented MP4, so a crash leaves a
   playable file. Stops by itself below 2 GB of free disk space.
 - **Screenshots** as PNG.
-- **Sources.** The monitor of the game, a chosen monitor, a single window, or a region of one.
-- **Buffer only in games.** Or always, switchable in the tray menu.
+- **Sources.** The main monitor by default, or a chosen monitor, the monitor of the game,
+  or all monitors side by side in one picture. A region of the picture is possible too.
+- **Clip anywhere.** The buffer runs on the desktop as well. "Only while a game is
+  recognised" is one switch away.
+- **Webcam.** Recorded as a file of its own next to each clip. In the editor you choose the
+  corner and the size, or leave it out, and the export lays it over the picture.
 
 ### Separate everything
 
@@ -101,12 +106,15 @@ There is no release download yet, you build Klip yourself. That takes a few minu
   round ends. In the library such a clip is marked "Automatic clip" together with the
   reason, for example "Ace".
 - **Tray, autostart, single instance.**
+- **Says what went wrong.** A clip that could not be saved, or a hotkey another program
+  holds, shows as a red notice instead of doing nothing.
 - **Overlay** as a window of its own on top of the game: a notice in the top right for
   every clip, auto clip and recording, and a panel you can drag anywhere with buttons for
   the main actions. It is excluded from the recording.
 - **A sound for every event,** and your own if you want: a WAV file named `clip.wav`,
   `auto.wav`, `rec_start.wav`, `rec_stop.wav`, `shot.wav` or `tick.wav` in
-  `%APPDATA%\Klip\sounds` replaces the built in one.
+  `%APPDATA%\Klip\sounds` replaces the built in one. The settings have a row per sound to listen and
+  to pick a file.
 - **English and German.** English by default, switchable in the settings.
 
 ## Screens
@@ -120,8 +128,7 @@ There is no release download yet, you build Klip yourself. That takes a few minu
 | **Export settings** | **Overlay elements** |
 | <img src="docs/screenshots/export.png" width="420" alt="Export settings"> | <img src="docs/screenshots/overlay.png" width="420" alt="Overlay panel, notices and input overlay"> |
 
-The app screenshots show the running interface with generated test clips. The library
-picture is one step behind: the game filter is a dropdown by now. The overlay
+The app screenshots show the running interface with generated test clips. The overlay
 pictures are rendered by the overlay's own drawing code into an image: the real overlay
 window is invisible to screen capture on purpose.
 
@@ -171,11 +178,14 @@ except MKV and WAV, the setup program, the overlay window on a second monitor.
 **Built, but not yet tried in a real game:** starting and stopping the buffer by a game,
 real hotkey presses, the overlay on top of a fullscreen game, dragging and clicking the panel
 with a real mouse, changing the clip folder while the recorder runs, auto clips on live
-Valorant picture. The Valorant detector found all six events in three real clips, which is far too
+Valorant picture, a real webcam (the camera path is tested with a video file standing in
+for one, because no camera was connected). The Valorant detector found all six events in three real clips, which is far too
 little footage to call a hit rate. Multi kills are only tested with synthetic input.
 
-**Missing:** software encoding as a fallback, a way to edit per game profiles, the layout editor for the input overlay, clutch, spike and match end detection,
-more games.
+**Missing:** software encoding as a fallback, a way to edit per game profiles, the layout
+editor for the input overlay, clutch, spike and match end detection, more games, auto clips
+while all monitors are recorded. A program that starts to play sound during a manual
+recording gets no track of its own in that recording, only in the mix.
 
 Measured on an RTX 5060 and an i7-8700 at 1080p: 0.0 to 0.1 % CPU at idle without audio,
 about 1.5 % with all default audio tracks, 2.3 to 2.9 % with audio, detection, input capture

@@ -14,7 +14,7 @@ import { LANGUAGES, t, tn } from "../lib/i18n";
 import type { Key } from "../lib/i18n";
 import { eventLabel, planCleanup } from "../lib/library";
 import { ACCENT_PRESETS, applyTheme, cleanAccent, DEFAULT_ACCENT, normalizeSettings } from "../lib/settings";
-import type { AutoClipRule, AutoClipRules, Config, Corner, HotkeyAction, HotkeyBinding, VideoCodec } from "../lib/types";
+import type { AutoClipRule, AutoClipRules, Config, Corner, HotkeyAction, HotkeyBinding, MonitorChoice, VideoCodec } from "../lib/types";
 import { useApp } from "../state";
 import { Button, Card, Choice, Modal, NumberField, PathField, Row, Select, Toggle, useToast } from "../ui";
 import { Shell } from "./Shell";
@@ -72,6 +72,9 @@ function RecordingPage() {
         <Row label={t("rec.bufferMode")} help={t("rec.bufferModeHelp")}>
           <Select<Config["buffer_mode"]> label={t("rec.bufferMode")} value={config.buffer_mode} onChange={(buffer_mode) => set({ buffer_mode })} options={[{ value: "game_only", label: t("rec.modeGame") }, { value: "always", label: t("rec.modeAlways") }]} />
         </Row>
+        <Row label={t("rec.monitor")} help={t("rec.monitorHelp")}>
+          <MonitorSelect value={config.monitor ?? { type: "primary" }} onChange={(monitor) => set({ monitor })} />
+        </Row>
         <Row label={t("rec.length")} help={t("rec.lengthHelp")}>
           <input type="range" min={15} max={1200} step={15} value={config.buffer_seconds} aria-label={t("rec.bufferLength")} onChange={(e) => set({ buffer_seconds: Number(e.target.value) })} style={{ width: 220 }} />
           <span className="mono value">
@@ -111,6 +114,7 @@ function RecordingPage() {
           <RegionField value={config.region} onChange={(region) => set({ region })} />
         </Row>
       </Card>
+      <CameraCard value={config.camera ?? DEFAULT_CAMERA} onChange={(camera) => set({ camera })} />
     </>
   );
 }
@@ -264,8 +268,138 @@ function OverlayPage() {
           <span className="mono value">{Math.round(overlay.sound_volume * 100)} %</span>
         </Row>
       </Card>
+      <SoundsCard volume={overlay.sound_volume} />
       <Note>{t("ov.panelNote", actionLabel({ type: "overlay" }))}</Note>
     </>
+  );
+}
+
+/** On or off, which camera, and where it sits by default. */
+function CameraCard(props: { value: NonNullable<Config["camera"]>; onChange: (value: NonNullable<Config["camera"]>) => void }) {
+  const { recorder } = useApp();
+  const cam = props.value;
+  const set = (patch: Partial<NonNullable<Config["camera"]>>) => props.onChange({ ...cam, ...patch });
+  const known = recorder?.status?.cameras ?? [];
+  // A chosen camera stays in the list while it is unplugged or the recorder is off.
+  const names = cam.device && !known.includes(cam.device) ? [...known, cam.device] : known;
+  return (
+    <Card title={t("cam.title")}>
+      <Row label={t("cam.enabled")} help={t("cam.enabledHelp")}>
+        <Toggle checked={cam.enabled} label={t("cam.enabled")} onChange={(enabled) => set({ enabled })} />
+      </Row>
+      <Row label={t("cam.device")} help={recorder?.status?.camera ? t("cam.running", recorder.status.camera) : known.length === 0 && recorder?.connected ? t("cam.none") : undefined}>
+        <Select
+          label={t("cam.device")}
+          value={cam.device ?? ""}
+          disabled={!cam.enabled}
+          onChange={(device) => set({ device: device || null })}
+          options={[{ value: "", label: t("cam.first") }, ...names.map((n) => ({ value: n, label: n }))]}
+        />
+      </Row>
+      <Row label={t("cam.corner")}>
+        <Select<Corner>
+          label={t("cam.corner")}
+          value={cam.corner}
+          disabled={!cam.enabled}
+          onChange={(corner) => set({ corner })}
+          options={[
+            { value: "top_left", label: t("in.cornerTopLeft") },
+            { value: "top_right", label: t("in.cornerTopRight") },
+            { value: "bottom_left", label: t("in.cornerBottomLeft") },
+            { value: "bottom_right", label: t("in.cornerBottomRight") },
+          ]}
+        />
+      </Row>
+      <Row label={t("cam.size")}>
+        <input type="range" min={10} max={60} step={1} value={cam.size_percent} disabled={!cam.enabled} aria-label={t("cam.size")} onChange={(e) => set({ size_percent: Number(e.target.value) })} style={{ width: 220 }} />
+        <span className="mono value">{cam.size_percent} %</span>
+      </Row>
+    </Card>
+  );
+}
+
+const DEFAULT_CAMERA: NonNullable<Config["camera"]> = { enabled: false, device: null, corner: "bottom_right", size_percent: 25 };
+
+/** Main monitor, the monitor of the game, or one monitor out of the recorder's list. */
+function MonitorSelect(props: { value: MonitorChoice; onChange: (value: MonitorChoice) => void }) {
+  const { recorder } = useApp();
+  const known = recorder?.status?.monitors ?? [];
+  const chosen = props.value.type === "index" ? props.value.index : -1;
+  // A chosen monitor stays in the list while the recorder is off or the monitor unplugged.
+  const count = Math.max(known.length, chosen + 1);
+  const single = Array.from({ length: count }, (_, i) => {
+    const size = known[i] ? (i === 0 ? t("rec.monMain", known[i]) : known[i]) : null;
+    return { value: `i${i}`, label: size ? t("rec.monIndex", i + 1, size) : t("rec.monIndexPlain", i + 1) };
+  });
+  const value = props.value.type === "index" ? `i${props.value.index}` : props.value.type;
+  return (
+    <Select
+      label={t("rec.monitor")}
+      value={value}
+      onChange={(v) => props.onChange(v === "primary" || v === "game" || v === "all" ? { type: v } : { type: "index", index: Number(v.slice(1)) })}
+      options={[{ value: "primary", label: t("rec.monPrimary") }, { value: "game", label: t("rec.monGame") }, { value: "all", label: t("rec.monAll") }, ...single]}
+    />
+  );
+}
+
+const SOUND_NAMES = ["clip", "auto", "rec_start", "rec_stop", "shot", "tick"] as const;
+
+/** One row per notice sound: listen, replace with an own WAV file, back to the built in one. */
+function SoundsCard(props: { volume: number }) {
+  const toast = useToast();
+  const [custom, setCustom] = useState<Record<string, boolean>>({});
+  const [dir, setDir] = useState("");
+  const load = () =>
+    call<{ dir: string; sounds: { name: string; custom: boolean }[] }>("sounds_list").then(
+      (r) => {
+        setDir(r.dir);
+        setCustom(Object.fromEntries(r.sounds.map((x) => [x.name, x.custom])));
+      },
+      (e) => toast(errorText(e), "error"),
+    );
+  useEffect(() => {
+    void load();
+  }, []);
+  const play = async (name: string) => {
+    try {
+      const data = await call<{ base64: string }>("sound_data", { name });
+      const audio = new Audio("data:audio/wav;base64," + data.base64);
+      // The files are quiet on purpose. The preview follows the volume of the setting.
+      audio.volume = Math.min(1, Math.max(0.05, props.volume));
+      await audio.play();
+    } catch (e) {
+      toast(errorText(e), "error");
+    }
+  };
+  const choose = async (name: string) => {
+    // The native dialog only exists in the real app, the browser preview asks for a path.
+    const path = isTauri ? await pickFile(dir || undefined, "WAV", ["wav"]) : window.prompt(t("ov.sndTyped"));
+    if (!path) return;
+    try {
+      await call("sound_set", { name, path });
+      await load();
+      void play(name);
+    } catch (e) {
+      toast(errorText(e), "error");
+    }
+  };
+  const reset = (name: string) => call("sound_reset", { name }).then(load, (e) => toast(errorText(e), "error"));
+  return (
+    <Card title={t("ov.sounds")}>
+      <p className="muted small">{t("ov.soundsHelp")}</p>
+      {SOUND_NAMES.map((name) => (
+        <Row key={name} label={t(("ov.snd." + name) as Key)} help={custom[name] ? t("ov.sndOwn") : t("ov.sndBuiltIn")}>
+          <Button small onClick={() => void play(name)}>{t("ov.sndPlay")}</Button>
+          <Button small onClick={() => void choose(name)}>{t("ov.sndChoose")}</Button>
+          {custom[name] ? <Button small kind="ghost" onClick={() => void reset(name)}>{t("ov.sndReset")}</Button> : null}
+        </Row>
+      ))}
+      {dir ? (
+        <Row label={t("ov.sndFolder")} help={dir}>
+          <Button small kind="ghost" onClick={() => void call("reveal", { path: dir }).catch((e) => toast(errorText(e), "error"))}>{t("ov.sndFolder")}</Button>
+        </Row>
+      ) : null}
+    </Card>
   );
 }
 
@@ -301,12 +435,6 @@ function InputPage() {
           />
         </Row>
       </Card>
-      <Card title={t("in.liveTitle")}>
-        <Row label={t("in.live")} help={t("in.liveHelp")}>
-          <Toggle checked={input.live} label={t("in.live")} disabled={!input.enabled} onChange={(live) => setInput({ live })} />
-        </Row>
-      </Card>
-      {input.live && !config.overlay.enabled ? <Note warn>{t("in.overlayOff")}</Note> : null}
       <Note>{t("in.pauseNote", actionLabel({ type: "input_pause" }))}</Note>
     </>
   );

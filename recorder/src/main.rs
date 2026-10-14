@@ -8,7 +8,9 @@
 #![windows_subsystem = "windows"]
 
 mod audio;
+mod camera;
 mod capture;
+mod composite;
 mod encoder;
 mod gfx;
 mod hotkeys;
@@ -21,13 +23,13 @@ mod ring;
 mod shot;
 mod tap;
 
-use klip_core::{BufferMode, Config, HotkeyAction, IpcRequest, IpcResponse, Language, RecorderStatus, VideoCodec};
+use klip_core::{BufferMode, Config, HotkeyAction, IpcRequest, IpcResponse, Language, MonitorChoice, RecorderStatus, VideoCodec};
 use klip_games::{GameCatalog, GameEvent, GameWatcher, ManualList, RunningGame, WatcherOptions};
 use klip_overlay::{Action, ClipEntry, Cue, Overlay, OverlayConfig, OverlayState, PanelHints, SoundConfig, StatusKind, Toast};
 use klip_tray::{MenuEntry, Tray, TrayEvent, TrayOptions, TrayState};
 use pipeline::{GameInfo, Options, Pipeline, SourcePick};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -150,10 +152,45 @@ fn parse_args() -> Res<Args> {
     Ok(Args { cfg, out, source, test_seconds, test_clip, list, game_exe, no_tray, replay })
 }
 
-fn main() {
+/// True when standard output goes into `recorder.log` because nobody else reads it.
+static LOG_TO_FILE: AtomicBool = AtomicBool::new(false);
+
+/// Started from the tray or by autostart there is no console, and everything the recorder
+/// reports would be lost. Then it goes into `recorder.log` in the settings folder. The
+/// file starts anew once it passes half a megabyte.
+fn log_to_file_without_console() {
+    use std::os::windows::io::IntoRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::Console::{GetStdHandle, SetStdHandle, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
     unsafe {
-        let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+        if AttachConsole(ATTACH_PARENT_PROCESS).is_ok() {
+            return;
+        }
+        // Started with its output redirected (a test, a script): leave it there.
+        if GetStdHandle(STD_OUTPUT_HANDLE).is_ok_and(|h| !h.is_invalid() && !h.0.is_null()) {
+            return;
+        }
+        let dir = klip_core::data_dir();
+        let path = dir.join("recorder.log");
+        let _ = std::fs::create_dir_all(&dir);
+        let fresh = std::fs::metadata(&path).map(|m| m.len() > 512 * 1024).unwrap_or(true);
+        let file = std::fs::OpenOptions::new().create(true).append(!fresh).write(true).truncate(fresh).open(&path);
+        let Ok(file) = file else { return };
+        let Ok(second) = file.try_clone() else { return };
+        let _ = SetStdHandle(STD_OUTPUT_HANDLE, HANDLE(file.into_raw_handle()));
+        let _ = SetStdHandle(STD_ERROR_HANDLE, HANDLE(second.into_raw_handle()));
+        LOG_TO_FILE.store(true, Ordering::Relaxed);
     }
+    println!("---- klip-recorder {} started {} ----", env!("CARGO_PKG_VERSION"), stamp_now());
+}
+
+fn stamp_now() -> String {
+    let t = unsafe { GetLocalTime() };
+    format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
+}
+
+fn main() {
+    log_to_file_without_console();
     if let Err(e) = run() {
         eprintln!("klip-recorder: {e}");
         std::process::exit(1);
@@ -184,6 +221,8 @@ struct App {
     /// Clip folder forced on the command line. Without it the settings decide, read anew
     /// every time, so a folder changed in the app counts at once.
     out: Option<PathBuf>,
+    /// Hotkeys Windows refused, for the status the app reads.
+    hotkey_problems: Mutex<Vec<String>>,
     /// The game that is running right now.
     game: Mutex<Option<GameInfo>>,
     /// The clips saved last, newest first, for the overlay panel.
@@ -198,6 +237,15 @@ struct App {
 }
 
 impl App {
+    /// The monitor the settings ask for when nothing else decides.
+    fn default_source(&self) -> SourcePick {
+        match self.cfg.lock().unwrap().monitor {
+            MonitorChoice::Index { index } if gfx::monitors().is_ok_and(|m| index < m.len()) => SourcePick::Monitor(index),
+            MonitorChoice::All => SourcePick::All,
+            _ => SourcePick::Primary,
+        }
+    }
+
     fn out_dir(&self) -> PathBuf {
         self.out.clone().unwrap_or_else(|| self.cfg.lock().unwrap().clip_dir())
     }
@@ -214,6 +262,21 @@ impl App {
     }
 
     fn status(&self) -> RecorderStatus {
+        let mut status = self.status_of_chain();
+        status.hotkey_problems = self.hotkey_problems.lock().unwrap().clone();
+        status.cameras = camera::names();
+        status.camera = self.current().and_then(|p| p.camera_name());
+        status.monitors = gfx::monitors()
+            .map(|list| {
+                list.iter()
+                    .map(|m| format!("{}x{} at {},{}", m.rect.right - m.rect.left, m.rect.bottom - m.rect.top, m.rect.left, m.rect.top))
+                    .collect()
+            })
+            .unwrap_or_default();
+        status
+    }
+
+    fn status_of_chain(&self) -> RecorderStatus {
         match self.current() {
             Some(p) => p.status(),
             None => RecorderStatus {
@@ -307,6 +370,7 @@ fn run() -> Res<()> {
         pipeline: Mutex::new(None),
         cfg: Mutex::new(args.cfg.clone()),
         out: args.out.clone(),
+        hotkey_problems: Mutex::new(Vec::new()),
         game: Mutex::new(None),
         recent: Mutex::new(Vec::new()),
         source: Mutex::new(None),
@@ -362,7 +426,7 @@ fn run() -> Res<()> {
         });
     } else if let Some(seconds) = args.test_seconds {
         // Tests start the chain right away and know nothing of tray or game detection.
-        app.start_pipeline(fixed_source(&args.source)?.unwrap_or(SourcePick::Primary));
+        app.start_pipeline(fixed_source(&args.source)?.unwrap_or_else(|| app.default_source()));
         let Some(p) = app.current() else { return Err("the buffer did not start".into()) };
         if let Some(exe) = &args.game_exe {
             p.set_game(Some(GameInfo { id: "test".into(), name: "Test".into(), exe_name: exe.clone() }), true);
@@ -391,7 +455,7 @@ fn run() -> Res<()> {
         if let Some(source) = fixed_source(&args.source)? {
             app.start_pipeline(source);
         } else if always {
-            app.start_pipeline(SourcePick::Primary);
+            app.start_pipeline(app.default_source());
         } else {
             println!("buffer: waiting for a game");
         }
@@ -441,6 +505,7 @@ fn run() -> Res<()> {
 
         // Live input overlay: look at the held keys thirty times a second while a game
         // has the focus, and pass on changes only. Asleep otherwise.
+        // The keys are only shown in the clip, never over the game (`Config::migrated`).
         if args.cfg.input.live && overlay.is_some() {
             let tx = tx.clone();
             let app = app.clone();
@@ -479,6 +544,7 @@ fn run() -> Res<()> {
             println!("hotkey: {} = {:?}", b.keys, b.action);
         }
         problems.iter().for_each(|p| println!("hotkey problem: {p}"));
+        warn_hotkeys(&app, overlay.as_ref(), problems);
 
         // The app talks to the recorder through a pipe. Actions run right on the pipe
         // thread, only things bound to the main thread (hotkeys, leaving) are posted over.
@@ -542,6 +608,7 @@ fn run() -> Res<()> {
                             actions = registered;
                             println!("config: reloaded, {} hotkeys", actions.len());
                             problems.iter().for_each(|p| println!("hotkey problem: {p}"));
+                            warn_hotkeys(&app, overlay.as_ref(), problems);
                             // Hotkeys change in place. Anything else needs a fresh chain,
                             // which costs the buffer, so it waits for a running recording.
                             let rest = |c: &Config| {
@@ -557,7 +624,9 @@ fn run() -> Res<()> {
                                         println!("config: new settings apply after the recording")
                                     }
                                     Some(_) => {
-                                        let source = app.source.lock().unwrap().unwrap_or(SourcePick::Primary);
+                                        // A source forced on the command line stays, else the
+                                        // settings decide, they may just have changed.
+                                        let source = fixed_source(&args.source).ok().flatten().unwrap_or_else(|| app.default_source());
                                         app.stop_pipeline();
                                         app.start_pipeline(source);
                                         println!("config: buffer restarted with the new settings");
@@ -579,7 +648,11 @@ fn run() -> Res<()> {
                         match event {
                             Event::Tick => {
                                 if let Some(p) = app.current() {
-                                    println!("{}", p.stat_line(&mut meter));
+                                    // The numbers are for a console. In the log file they
+                                    // would only bury the lines that matter.
+                                    if !LOG_TO_FILE.load(Ordering::Relaxed) {
+                                        println!("{}", p.stat_line(&mut meter));
+                                    }
                                     if let Some(reason) = p.recording_must_stop() {
                                         eprintln!("klip-recorder: stopping the recording: {reason}");
                                         chosen = Some(HotkeyAction::RecordToggle);
@@ -690,7 +763,10 @@ fn run() -> Res<()> {
                     let was_recording = app.current().is_some_and(|p| p.is_recording());
                     match app.perform(&action) {
                         Ok(()) => announce(&app, overlay.as_ref(), &action, was_recording),
-                        Err(e) => eprintln!("klip-recorder: {action:?} failed: {e}"),
+                        Err(e) => {
+                            eprintln!("klip-recorder: {action:?} failed: {e}");
+                            announce_failure(&app, overlay.as_ref(), &action, &e.to_string());
+                        }
                     }
                 }
                 refresh_tray(&app, tray.as_ref());
@@ -716,7 +792,7 @@ fn apply_buffer_mode(app: &App) {
     let always = app.cfg.lock().unwrap().buffer_mode == BufferMode::Always;
     let game = app.game.lock().unwrap().clone();
     match (always, game.is_some(), app.current().is_some()) {
-        (true, _, false) => app.start_pipeline(SourcePick::Primary),
+        (true, _, false) => app.start_pipeline(app.default_source()),
         (false, false, true) => app.stop_pipeline(),
         _ => {}
     }
@@ -740,14 +816,16 @@ fn on_game_event(app: &App, event: GameEvent) {
         GameEvent::Foreground(g) => {
             *app.game.lock().unwrap() = Some(info(&g));
             if app.current().is_none() {
-                // Record the monitor the game is on. The handle of the foreground window is
-                // only used to ask Windows which monitor that is.
+                // By default the main monitor. With the choice "monitor of the game" the
+                // handle of the foreground window is used, only to ask Windows which
+                // monitor that is.
+                let follow = app.cfg.lock().unwrap().monitor == MonitorChoice::Game;
                 let source = match klip_games::foreground::foreground_ids() {
-                    Some((hwnd, pid)) if pid == g.pid => {
+                    Some((hwnd, pid)) if follow && pid == g.pid => {
                         let monitor = unsafe { MonitorFromWindow(HWND(hwnd as *mut _), MONITOR_DEFAULTTONEAREST) };
                         SourcePick::MonitorHandle(monitor.0 as isize)
                     }
-                    _ => SourcePick::Primary,
+                    _ => app.default_source(),
                 };
                 app.start_pipeline(source);
             }
@@ -774,6 +852,48 @@ fn on_game_event(app: &App, event: GameEvent) {
             println!("game: unknown fullscreen program {}, add it in the app if it is a game", f.exe_name.as_deref().unwrap_or("?"));
         }
     }
+}
+
+/// Remembers which hotkeys Windows refused and says so on screen. A clip key that does
+/// nothing without a word was the first thing the owner ran into.
+fn warn_hotkeys(app: &App, overlay: Option<&Overlay>, problems: Vec<String>) {
+    let de = app.cfg.lock().unwrap().language == Language::De;
+    if let Some(o) = overlay {
+        for p in problems.iter().take(3) {
+            // The sentence starts with the key in quotes: 'Alt+S' is already taken ...
+            let key = p.split('\'').nth(1).unwrap_or("");
+            let title = if de { format!("Taste {key} geht nicht") } else { format!("Key {key} does not work") };
+            let detail = if p.contains("already taken") {
+                if de { "Ein anderes Programm belegt sie" } else { "Another program holds it" }
+            } else if de {
+                "Siehe Einstellungen, Tasten"
+            } else {
+                "See settings, hotkeys"
+            };
+            o.toast(Toast { hold: Some(Duration::from_secs(8)), ..Toast::recording(&title, detail).with_cue(Cue::Tick) });
+        }
+    }
+    *app.hotkey_problems.lock().unwrap() = problems;
+}
+
+/// Says on screen why an action did nothing.
+fn announce_failure(app: &App, overlay: Option<&Overlay>, action: &HotkeyAction, error: &str) {
+    let Some(o) = overlay else { return };
+    let de = app.cfg.lock().unwrap().language == Language::De;
+    let what = match (action, de) {
+        (HotkeyAction::Clip { .. }, true) => "Kein Clip gespeichert",
+        (HotkeyAction::Clip { .. }, false) => "No clip saved",
+        (HotkeyAction::Screenshot, true) => "Kein Screenshot",
+        (HotkeyAction::Screenshot, false) => "No screenshot",
+        (_, true) => "Das ging nicht",
+        (_, false) => "That did not work",
+    };
+    let why = if error.contains("buffer is off") {
+        if de { "Puffer aus: kein Spiel erkannt" } else { "Buffer off: no game detected" }.to_string()
+    } else {
+        error.to_string()
+    };
+    o.toast(Toast { hold: Some(Duration::from_secs(5)), ..Toast::recording(what, &why).with_cue(Cue::Tick) });
 }
 
 /// Notice and tone after an action, and the list of recent clips for the panel.

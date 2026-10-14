@@ -62,9 +62,27 @@ pub struct ClipMeta {
     pub favorite: bool,
     #[serde(default)]
     pub tags: Vec<String>,
+    /// The webcam, recorded as a file of its own next to the clip.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera: Option<CameraTrack>,
+}
+
+/// Where the camera of a clip is and how it lines up with the clip.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CameraTrack {
+    /// File name next to the clip, `<clip>.cam.mp4`.
+    pub file: String,
+    /// Time of the first camera frame on the timeline of the clip, in milliseconds. Below
+    /// zero when the camera file starts a little earlier than the clip.
+    pub offset_ms: i64,
 }
 
 impl ClipMeta {
+    /// Path of the camera file that belongs to `video`.
+    pub fn camera_path(video: &std::path::Path) -> PathBuf {
+        video.with_extension("cam.mp4")
+    }
+
     pub fn sidecar_path(video: &std::path::Path) -> PathBuf {
         video.with_extension("klip.json")
     }
@@ -134,7 +152,7 @@ pub fn data_dir() -> PathBuf {
 }
 
 /// Version of `config.json`. Bump on breaking changes and migrate on read.
-pub const CONFIG_VERSION: u32 = 2;
+pub const CONFIG_VERSION: u32 = 4;
 
 /// Language of everything the user reads: app, tray menu, overlay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -152,6 +170,22 @@ pub enum AudioMode {
     All,
     /// Only the programs listed in `apps`.
     Selected,
+}
+
+/// Which monitor is recorded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum MonitorChoice {
+    /// The main monitor of Windows, whatever else is connected.
+    #[default]
+    Primary,
+    /// The monitor the game in the foreground is on, the main monitor without a game.
+    Game,
+    /// A chosen monitor: its place in the list of the recorder, the main monitor is 0.
+    /// Falls back to the main monitor when it is not connected.
+    Index { index: usize },
+    /// Every monitor side by side in one wide picture, as Windows arranges them.
+    All,
 }
 
 /// Default accent colour. Flat, never part of a gradient.
@@ -248,6 +282,26 @@ pub struct InputConfig {
     pub corner: Corner,
 }
 
+/// The webcam. Recorded as a picture of its own next to each clip, so the editor can
+/// place it, resize it or leave it out at export.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CameraConfig {
+    pub enabled: bool,
+    /// Part of the name of the camera to use. The first camera Windows lists if absent.
+    pub device: Option<String>,
+    /// Corner the camera sits in by default in the editor and the export.
+    pub corner: Corner,
+    /// Width of the camera picture in the export, in percent of the clip width.
+    pub size_percent: u32,
+}
+
+impl Default for CameraConfig {
+    fn default() -> Self {
+        Self { enabled: false, device: None, corner: Corner::BottomRight, size_percent: 25 }
+    }
+}
+
 /// A corner of the picture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -317,6 +371,10 @@ pub struct Config {
     pub auto_clips: bool,
     /// Record only this part of the source: left, top, width, height in pixels.
     pub region: Option<[u32; 4]>,
+    /// Which monitor is recorded.
+    pub monitor: MonitorChoice,
+    /// The webcam, off by default.
+    pub camera: CameraConfig,
     pub language: Language,
     /// Accent colour as "#RRGGBB", shared by app, tray and overlay.
     pub accent: String,
@@ -342,11 +400,14 @@ impl Default for Config {
             clip_dir: None,
             max_recording_minutes: 240,
             audio: AudioConfig::default(),
-            buffer_mode: BufferMode::GameOnly,
+            // Clipping works everywhere, on the desktop too. "Only in games" is a choice.
+            buffer_mode: BufferMode::Always,
             input: InputConfig::default(),
             overlay: OverlaySettings::default(),
             auto_clips: true,
             region: None,
+            monitor: MonitorChoice::Primary,
+            camera: CameraConfig::default(),
             language: Language::En,
             accent: DEFAULT_ACCENT.to_string(),
             cache_dir: None,
@@ -378,9 +439,17 @@ impl Config {
     pub fn load() -> Result<Self, String> {
         let path = Self::path();
         match std::fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice::<Self>(&bytes)
-                .map(Self::migrated)
-                .map_err(|e| format!("{}: {e}", path.display())),
+            Ok(bytes) => {
+                let read = serde_json::from_slice::<Self>(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+                let was = read.version;
+                let now = read.migrated();
+                if now.version != was {
+                    // Written back once, so the app shows what the recorder really does.
+                    // If that fails the next start migrates again, nothing is lost.
+                    let _ = now.save();
+                }
+                Ok(now)
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(e) => Err(format!("{}: {e}", path.display())),
         }
@@ -420,6 +489,21 @@ impl Config {
             self.accent = DEFAULT_ACCENT.to_string();
             self.version = 2;
         }
+        if self.version < 3 {
+            // The owner never wants to see the keys or a status mark while playing. Older
+            // files carried both switched on, from the time they were the default.
+            self.overlay.indicator = false;
+            self.version = 3;
+        }
+        if self.version < 4 {
+            // The owner wants to clip on the desktop as well: the buffer runs always
+            // unless someone switches it back to "only in games" after this.
+            self.buffer_mode = BufferMode::Always;
+            self.version = 4;
+        }
+        // The pressed keys are only ever shown in the clip. The live display over the game
+        // was removed, the field stays so that old files still load.
+        self.input.live = false;
         self
     }
 
@@ -501,6 +585,19 @@ pub struct RecorderStatus {
     /// Game in the foreground, if one was recognised.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub game: Option<String>,
+    /// The connected monitors in the order `MonitorChoice::Index` counts them, each as
+    /// a short description such as "1920x1080 at 0,0".
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub monitors: Vec<String>,
+    /// Names of the connected cameras.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cameras: Vec<String>,
+    /// The camera that is running, if one is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera: Option<String>,
+    /// Hotkeys that could not be registered, each as one finished sentence.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hotkey_problems: Vec<String>,
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@
 //! this unit exists only for that time, and at idle the recorder holds no GPU resources.
 
 use crate::audio;
+use crate::camera;
 use crate::capture::{self, Capture, CaptureStats};
 use crate::encoder::{Encoder, EncoderConfig, MfEncoder, StreamType};
 use crate::gfx;
@@ -11,11 +12,11 @@ use crate::record::Recording;
 use crate::ring::Ring;
 use crate::shot;
 use crate::{free_bytes, new_path, qpc_100ns, stamp, CpuMeter, Res};
-use klip_core::{ClipEvent, ClipKind, ClipMeta, Config, HotkeyAction, RecorderStatus, VideoCodec, SIDECAR_VERSION};
+use klip_core::{CameraTrack, ClipEvent, ClipKind, ClipMeta, Config, HotkeyAction, RecorderStatus, VideoCodec, SIDECAR_VERSION};
 use klip_input::{InputCapture, InputClip, LayoutKind, OverlayLayout, Preset};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Graphics::Direct3D11::{ID3D11Device, ID3D11DeviceContext, ID3D11Texture2D};
@@ -41,7 +42,13 @@ pub enum SourcePick {
     MonitorHandle(isize),
     /// Window handle as a number.
     Window(isize),
+    /// Every monitor of the main graphics card, side by side in one picture.
+    All,
 }
+
+/// The widest picture the hardware encoders take (NVENC, Quick Sync and AMF all stop at
+/// 4096 for H.264). A wider desktop is scaled down to fit.
+const MAX_ENCODE_WIDTH: u32 = 4096;
 
 /// Called with path and length in seconds after the chain saved a clip on its own.
 pub type Notify = Arc<dyn Fn(PathBuf, u32) + Send + Sync>;
@@ -74,6 +81,71 @@ struct Shared {
     /// One buffer per audio track, same length as the video buffer.
     audio: Vec<Ring>,
     recording: Option<Recording>,
+    /// The webcam: its buffer and, during a manual recording, its own file.
+    cam: Option<Ring>,
+    cam_recording: Option<Recording>,
+}
+
+/// The webcam from picture to packet: upload, conversion, an encoder of its own.
+struct CamChain {
+    texture: ID3D11Texture2D,
+    context: ID3D11DeviceContext,
+    converter: Mutex<gfx::Converter>,
+    enc: Arc<dyn Encoder>,
+    width: u32,
+    height: u32,
+}
+
+// SAFETY: the device context is multithread protected, the converter sits behind a lock.
+unsafe impl Send for CamChain {}
+unsafe impl Sync for CamChain {}
+
+impl CamChain {
+    fn new(gfx: &gfx::Gfx, width: u32, height: u32, shared: Arc<Mutex<Shared>>) -> Res<Self> {
+        let desc = windows::Win32::Graphics::Direct3D11::D3D11_TEXTURE2D_DESC {
+            Width: width,
+            Height: height,
+            MipLevels: 1,
+            ArraySize: 1,
+            Format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM,
+            SampleDesc: windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+            Usage: windows::Win32::Graphics::Direct3D11::D3D11_USAGE_DEFAULT,
+            // The converter needs the same flags a captured frame has.
+            BindFlags: (windows::Win32::Graphics::Direct3D11::D3D11_BIND_RENDER_TARGET.0
+                | windows::Win32::Graphics::Direct3D11::D3D11_BIND_SHADER_RESOURCE.0) as u32,
+            CPUAccessFlags: 0,
+            MiscFlags: 0,
+        };
+        let mut texture = None;
+        unsafe { gfx.device.CreateTexture2D(&desc, None, Some(&mut texture))? };
+        let texture = texture.ok_or("CreateTexture2D returned nothing")?;
+        let converter = gfx::Converter::new(gfx, width, height, width, height, camera::FPS, None)?;
+        // H.264 always: the camera file must play everywhere, and its size is small.
+        let cfg = EncoderConfig { width, height, fps: camera::FPS, bitrate_kbps: 3000, codec: VideoCodec::H264, gop_seconds: 2 };
+        let enc: Arc<dyn Encoder> = Arc::new(MfEncoder::new(gfx, cfg, move |p| {
+            let mut s = shared.lock().unwrap();
+            if let Some(rec) = &mut s.cam_recording {
+                if let Err(e) = rec.push(&p) {
+                    eprintln!("klip-recorder: camera recording lost a frame: {e}");
+                }
+            }
+            if let Some(ring) = &mut s.cam {
+                ring.push(p);
+            }
+        })?);
+        Ok(Self { texture, context: gfx.context.clone(), converter: Mutex::new(converter), enc, width, height })
+    }
+
+    fn push(&self, bgra: &[u8], width: u32, height: u32, time: i64) {
+        if width != self.width || height != self.height {
+            return;
+        }
+        unsafe { self.context.UpdateSubresource(&self.texture, 0, None, bgra.as_ptr() as *const _, width * 4, 0) };
+        let nv12 = self.converter.lock().unwrap().convert(&self.texture);
+        if let Ok(nv12) = nv12 {
+            let _ = self.enc.submit(&nv12, time, 10_000_000 / camera::FPS as i64);
+        }
+    }
 }
 
 pub struct Pipeline {
@@ -97,7 +169,11 @@ pub struct Pipeline {
     game: Arc<Mutex<Option<GameInfo>>>,
     input: Option<InputCapture>,
     stop: Arc<AtomicBool>,
-    capture: Mutex<Option<Capture>>,
+    /// One capture per monitor that is recorded, empty for a replay.
+    capture: Mutex<Vec<Capture>>,
+    cam_chain: Arc<OnceLock<CamChain>>,
+    /// The running camera. Dropping it ends the reading thread.
+    camera: Mutex<Option<camera::Feed>>,
     cap_stats: Arc<CaptureStats>,
     replay_done: Arc<AtomicBool>,
     detector: Option<std::sync::mpsc::Sender<DetMsg>>,
@@ -133,17 +209,40 @@ impl Pipeline {
                 let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
                 (gfx::create(gfx::MonitorPick::Handle(monitor))?, capture::Source::Window(hwnd))
             }
+            SourcePick::All => {
+                let g = gfx::create(gfx::MonitorPick::Primary)?;
+                let m = g.monitor;
+                (g, capture::Source::Monitor(m))
+            }
         };
         println!("adapter: {}", gfx.adapter_name);
+        // All monitors: those on the adapter of the device, the others cannot be copied
+        // onto the same texture.
+        let multi = match opts.source {
+            SourcePick::All if opts.replay.is_none() => {
+                let (here, elsewhere): (Vec<_>, Vec<_>) =
+                    gfx::monitors()?.into_iter().partition(|m| m.adapter == gfx.adapter_name);
+                for m in &elsewhere {
+                    println!("monitors: one on {} is left out, it is on another graphics card", m.adapter);
+                }
+                Some(here)
+            }
+            _ => None,
+        };
         let replay = match &opts.replay {
             Some(path) => Some((path.clone(), crate::replay::probe(path)?)),
             None => None,
         };
-        let mut prepared = if replay.is_none() { Some(capture::prepare(&gfx, source)?) } else { None };
-        let (src_w, src_h) = match (&prepared, &replay) {
-            (Some(p), _) => (p.width, p.height),
-            (None, Some((_, size))) => *size,
-            (None, None) => unreachable!(),
+        let mut prepared = if replay.is_none() && multi.is_none() { Some(capture::prepare(&gfx, source)?) } else { None };
+        let (src_w, src_h) = match (&prepared, &replay, &multi) {
+            (Some(p), _, _) => (p.width, p.height),
+            (None, Some((_, size)), _) => *size,
+            (None, None, Some(list)) => {
+                let (w, h, _) = crate::composite::layout(list);
+                println!("monitors: {} side by side", list.len());
+                (w, h)
+            }
+            (None, None, None) => unreachable!(),
         };
         println!("source: {src_w}x{src_h}");
         // A minimised window reports a tiny size that no encoder accepts.
@@ -171,6 +270,11 @@ impl Pipeline {
             }
             _ => (pic_w & !1, pic_h & !1),
         };
+        let (out_w, out_h) = if out_w > MAX_ENCODE_WIDTH {
+            (MAX_ENCODE_WIDTH, (out_h as u64 * MAX_ENCODE_WIDTH as u64 / out_w as u64) as u32 & !1)
+        } else {
+            (out_w, out_h)
+        };
         let enc_cfg = EncoderConfig {
             width: out_w,
             height: out_h,
@@ -190,7 +294,7 @@ impl Pipeline {
             cfg.buffer_seconds,
             if ring.is_on_disk() { "on disk".to_string() } else { "in RAM".to_string() }
         );
-        let shared = Arc::new(Mutex::new(Shared { ring, audio: Vec::new(), recording: None }));
+        let shared = Arc::new(Mutex::new(Shared { ring, audio: Vec::new(), recording: None, cam: None, cam_recording: None }));
         let dropped = Arc::new(AtomicU64::new(0));
         let stop = Arc::new(AtomicBool::new(false));
 
@@ -265,7 +369,12 @@ impl Pipeline {
         // regions out of the frame, a worker thread looks at them.
         let det_regions: Arc<Mutex<Vec<klip_detect::RegionRequest>>> = Arc::new(Mutex::new(Vec::new()));
         let (det_tx, det_rx) = std::sync::mpsc::channel::<DetMsg>();
-        let cap_det = cfg.auto_clips.then(|| (det_regions.clone(), det_tx.clone()));
+        // The detectors know the picture of one monitor. On the wide picture of all
+        // monitors their regions would point at the wrong places.
+        let cap_det = (cfg.auto_clips && multi.is_none()).then(|| (det_regions.clone(), det_tx.clone()));
+        if cfg.auto_clips && multi.is_some() {
+            println!("detect: auto clips need a single monitor, they rest while all are recorded");
+        }
         // Tap and time of the last sample. Behind a lock because the capture callback is shared.
         let tap = Mutex::new((crate::tap::RegionTap::new(&gfx.device, &gfx.context), 0i64));
 
@@ -322,20 +431,25 @@ impl Pipeline {
             }
         };
         let replay_done = Arc::new(AtomicBool::new(false));
-        let (cap, cap_stats) = match (&replay, prepared.take()) {
-            (Some((path, _)), _) => {
+        let (cap, cap_stats) = match (&replay, prepared.take(), &multi) {
+            (Some((path, _)), _, _) => {
                 let stats = Arc::new(CaptureStats::default());
                 crate::replay::start(&gfx, path, src_w, src_h, stop.clone(), replay_done.clone(), stats.clone(), on_frame)?;
                 println!("replay: {} at {src_w}x{src_h}, encoding {out_w}x{out_h}", path.display());
-                (None, stats)
+                (Vec::new(), stats)
             }
-            (None, Some(prepared)) => {
+            (None, Some(prepared), _) => {
                 let cap = capture::start(prepared, enc_cfg.fps, cfg.capture_cursor, on_frame)?;
                 println!("capture: {}x{} running, encoding {}x{}", cap.width, cap.height, out_w, out_h);
                 let stats = cap.stats.clone();
-                (Some(cap), stats)
+                (vec![cap], stats)
             }
-            (None, None) => unreachable!(),
+            (None, None, Some(list)) => {
+                let all = crate::composite::start(&gfx, list, enc_cfg.fps, cfg.capture_cursor, on_frame)?;
+                println!("capture: {} monitors as {}x{} running, encoding {}x{}", all.captures.len(), all.width, all.height, out_w, out_h);
+                (all.captures, all.stats)
+            }
+            (None, None, None) => unreachable!(),
         };
 
         // Heartbeat: Windows delivers no frames while the picture stands still. Without this
@@ -364,6 +478,39 @@ impl Pipeline {
             });
         }
 
+        // The webcam, if wanted. It gets its own converter, encoder and buffer, and every
+        // clip a camera file of its own. A camera that does not open costs the clip nothing.
+        let cam_chain: Arc<OnceLock<CamChain>> = Arc::new(OnceLock::new());
+        let camera = if cfg.camera.enabled && opts.replay.is_none() {
+            let chain = cam_chain.clone();
+            let started = camera::start(cfg.camera.device.as_deref(), Arc::new(AtomicBool::new(false)), move |bgra, w, h, time| {
+                if let Some(c) = chain.get() {
+                    c.push(bgra, w, h, time);
+                }
+            });
+            match started.and_then(|feed| {
+                let c = CamChain::new(&gfx, feed.width, feed.height, shared.clone())?;
+                Ok((feed, c))
+            }) {
+                Ok((feed, c)) => {
+                    let ring = if cfg.buffer_on_disk {
+                        Ring::on_disk(cfg.buffer_seconds, cfg.cache_dir().join("buffer").join("camera")).unwrap_or_else(|_| Ring::in_memory(cfg.buffer_seconds))
+                    } else {
+                        Ring::in_memory(cfg.buffer_seconds)
+                    };
+                    shared.lock().unwrap().cam = Some(ring);
+                    let _ = cam_chain.set(c);
+                    Some(feed)
+                }
+                Err(e) => {
+                    eprintln!("klip-recorder: camera not available: {e}");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         let detect = cfg.auto_clips;
         let this = Arc::new(Self {
             detector: detect.then_some(det_tx),
@@ -387,6 +534,8 @@ impl Pipeline {
             stop,
             cap_stats,
             capture: Mutex::new(cap),
+            cam_chain,
+            camera: Mutex::new(camera),
             replay_done,
             dropped,
             counters: Mutex::new((0, 0, 0, Instant::now())),
@@ -494,6 +643,7 @@ impl Pipeline {
             .collect();
         let mut meta = self.meta(ClipKind::AutoClip, ms, events);
         meta.reason = Some(job.label.id().to_string());
+        meta.camera = self.save_camera(&path, first, first + ms as i64 * 10_000);
         meta.write_next_to(&path)?;
         self.write_inputs(&path, first, first + ms as i64 * 10_000);
         *self.last_saved.lock().unwrap() = Some(path.display().to_string());
@@ -613,7 +763,11 @@ impl Pipeline {
                 let stream = self.enc.stream_type().ok_or("the encoder has not produced a frame yet")?;
                 let path = new_path(&self.dir(), "", "mp4")?;
                 let ms = mux::write_mp4(&path, &stream, &packets, &audio)?;
-                self.meta(ClipKind::Clip, ms, Vec::new()).write_next_to(&path)?;
+                let mut meta = self.meta(ClipKind::Clip, ms, Vec::new());
+                if let (Some(first), Some(last)) = (packets.first(), packets.last()) {
+                    meta.camera = self.save_camera(&path, first.pts, last.pts + last.duration);
+                }
+                meta.write_next_to(&path)?;
                 if let (Some(first), Some(last)) = (packets.first(), packets.last()) {
                     self.write_inputs(&path, first.pts, last.pts + last.duration);
                 }
@@ -628,6 +782,7 @@ impl Pipeline {
             HotkeyAction::RecordToggle => {
                 let mut s = self.shared.lock().unwrap();
                 if let Some(rec) = s.recording.take() {
+                    let cam_rec = s.cam_recording.take();
                     drop(s);
                     let (from, paused) = (rec.base(), rec.was_paused());
                     let (path, ms, markers) = rec.finish()?;
@@ -635,7 +790,19 @@ impl Pipeline {
                         .into_iter()
                         .map(|at_ms| ClipEvent { at_ms, kind: "marker".into(), label: None })
                         .collect();
-                    self.meta(ClipKind::Recording, ms, events).write_next_to(&path)?;
+                    let mut meta = self.meta(ClipKind::Recording, ms, events);
+                    if let Some(cam) = cam_rec {
+                        let offset_ms = (cam.base() - from) / 10_000;
+                        match cam.finish() {
+                            Ok((cam_path, _, _)) => {
+                                meta.camera = cam_path
+                                    .file_name()
+                                    .map(|n| CameraTrack { file: n.to_string_lossy().into_owned(), offset_ms });
+                            }
+                            Err(e) => eprintln!("klip-recorder: camera file not closed: {e}"),
+                        }
+                    }
+                    meta.write_next_to(&path)?;
                     // A pause shifts the video against the clock the inputs are stamped
                     // with. Rather than write a track that is off, write none.
                     if !paused {
@@ -663,6 +830,14 @@ impl Pipeline {
                         }
                     }
                     s.recording = Some(rec);
+                    // The camera gets a file of its own, started from its newest keyframe.
+                    if let Some(stream) = self.cam_chain.get().and_then(|c| c.enc.stream_type()) {
+                        let head = s.cam.as_mut().map(Ring::since_last_keyframe).unwrap_or_default();
+                        match Recording::start(ClipMeta::camera_path(&path), &stream, &[], &head) {
+                            Ok(cam) => s.cam_recording = Some(cam),
+                            Err(e) => eprintln!("klip-recorder: camera not recorded: {e}"),
+                        }
+                    }
                     // The input track must reach back to the start of the recording.
                     if let Some(input) = &self.input {
                         let longest = if self.max_recording_ms > 0 { self.max_recording_ms / 1000 } else { 24 * 3600 };
@@ -672,10 +847,17 @@ impl Pipeline {
                 }
             }
             HotkeyAction::RecordPause => {
-                if let Some(rec) = &mut self.shared.lock().unwrap().recording {
+                let mut s = self.shared.lock().unwrap();
+                if let Some(cam) = &mut s.cam_recording {
+                    cam.toggle_pause();
+                }
+                if let Some(rec) = &mut s.recording {
                     let paused = rec.toggle_pause();
                     if !paused {
                         self.enc.force_keyframe();
+                        if let Some(c) = self.cam_chain.get() {
+                            c.enc.force_keyframe();
+                        }
                     }
                     println!("REC {}", if paused { "paused" } else { "resumed" });
                 }
@@ -724,6 +906,10 @@ impl Pipeline {
             audio_tracks: self.audio_names(),
             last_saved: self.last_saved.lock().unwrap().clone(),
             game: self.game().map(|g| g.name),
+            hotkey_problems: Vec::new(),
+            monitors: Vec::new(),
+            cameras: Vec::new(),
+            camera: None,
         }
     }
 
@@ -766,9 +952,13 @@ impl Pipeline {
                 eprintln!("klip-recorder: recording not closed: {e}");
             }
         }
-        self.capture.lock().unwrap().take();
+        self.capture.lock().unwrap().clear();
+        self.camera.lock().unwrap().take();
         self.stop.store(true, Ordering::Release);
         self.enc.shutdown();
+        if let Some(c) = self.cam_chain.get() {
+            c.enc.shutdown();
+        }
         if let Some(input) = &self.input {
             input.set_game_active(false);
             input.clear();
@@ -776,6 +966,33 @@ impl Pipeline {
         let mut s = self.shared.lock().unwrap();
         s.ring.discard();
         s.audio.iter_mut().for_each(Ring::discard);
+        if let Some(cam) = &mut s.cam {
+            cam.discard();
+        }
+    }
+
+    /// Writes the camera for the stretch `from..=to` next to `video`. `None` without a
+    /// camera or when it has nothing for that stretch.
+    fn save_camera(&self, video: &Path, from: i64, to: i64) -> Option<CameraTrack> {
+        let stream = self.cam_chain.get()?.enc.stream_type()?;
+        let packets = self.shared.lock().unwrap().cam.as_mut()?.range(from, to);
+        let first = packets.first()?.pts;
+        let path = ClipMeta::camera_path(video);
+        match mux::write_mp4(&path, &stream, &packets, &[]) {
+            Ok(_) => Some(CameraTrack {
+                file: path.file_name()?.to_string_lossy().into_owned(),
+                offset_ms: (first - from) / 10_000,
+            }),
+            Err(e) => {
+                eprintln!("klip-recorder: camera file not written: {e}");
+                None
+            }
+        }
+    }
+
+    /// Name of the camera that is running.
+    pub fn camera_name(&self) -> Option<String> {
+        self.camera.lock().unwrap().as_ref().map(|f| f.name.clone())
     }
 
     fn meta(&self, kind: ClipKind, duration_ms: u64, events: Vec<ClipEvent>) -> ClipMeta {
@@ -795,6 +1012,7 @@ impl Pipeline {
             events,
             favorite: false,
             tags: Vec::new(),
+            camera: None,
         }
     }
 }
@@ -849,6 +1067,7 @@ fn take_screenshot(gpu: &SendGpu, texture: &ID3D11Texture2D, out_dir: &Path, gam
                 events: Vec::new(),
                 favorite: false,
                 tags: Vec::new(),
+                camera: None,
             }
             .write_next_to(&path)?;
             Ok(path)

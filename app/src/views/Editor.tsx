@@ -2,7 +2,7 @@
 // position go to `<name>.edit.json` next to it.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, CopyPlus, Pause, Play, RotateCcw, Scissors, Share, SkipBack, SkipForward, Trash2, Undo2 } from "lucide-react";
 import { call, errorText, fileUrl, runJob } from "../lib/api";
 import { editableStreams, prepareTracks, TrackMixer } from "../lib/audio";
@@ -20,7 +20,7 @@ import { activeAt, DEFAULT_OVERLAY, drawElement, drawOverlay, geometry, overlayD
 import type { InputTrack, KeyboardKind, OverlayConfig, OverlayScope } from "../lib/inputs";
 import { eventLabel, kindLabel } from "../lib/library";
 import { cleanAccent, onAccent } from "../lib/settings";
-import type { EditDoc, JobStatus, ProbeResult, TrackEdit } from "../lib/types";
+import type { CameraEdit, Corner, EditDoc, JobStatus, ProbeResult, TrackEdit } from "../lib/types";
 import { useApp } from "../state";
 import { Button, ProgressBar, Select, Toggle, useToast } from "../ui";
 import { ExportDialog } from "./ExportDialog";
@@ -40,6 +40,35 @@ interface Loaded {
   probe: ProbeResult;
   inputs: InputTrack | null;
   inputsError: string | null;
+}
+
+/** The webcam of the clip in its corner, kept in step with the main video. */
+function CameraLayer(props: { src: string; offsetMs: number; timeMs: number; playing: boolean; tempo: number; edit: CameraEdit; frameW: number }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const { offsetMs, timeMs, playing, tempo } = props;
+  useEffect(() => {
+    const cam = ref.current;
+    if (!cam) return;
+    const target = (timeMs - offsetMs) / 1000;
+    if (target < 0) {
+      // The camera starts a little after this point of the clip.
+      cam.pause();
+      cam.currentTime = 0;
+      return;
+    }
+    cam.playbackRate = tempo;
+    // Small drift is fine, a jump only when it shows.
+    if (Math.abs(cam.currentTime - target) > (playing ? 0.25 : 0.02)) cam.currentTime = target;
+    if (playing && cam.paused) void cam.play().catch(() => {});
+    if (!playing && !cam.paused) cam.pause();
+  }, [timeMs, offsetMs, playing, tempo]);
+  const width = Math.round((props.frameW * props.edit.size_percent) / 100);
+  const margin = Math.round(props.frameW * 0.02);
+  const corner = props.edit.corner;
+  const style: CSSProperties = { width, position: "absolute", pointerEvents: "none" };
+  style[corner.endsWith("left") ? "left" : "right"] = margin;
+  style[corner.startsWith("top") ? "top" : "bottom"] = margin;
+  return <video ref={ref} className="camera-layer" src={props.src} muted playsInline preload="auto" style={style} />;
 }
 
 /** The overlay canvas on top of the video. Drag moves it. */
@@ -494,6 +523,12 @@ export function Editor({ path }: { path: string }) {
   const overlayBase = loaded?.inputs ? overlayDefault(config.input, aspect) : DEFAULT_OVERLAY;
   const overlay = edit?.input_overlay ?? overlayBase;
   const setOverlay = (patch: Partial<OverlayConfig>, record = true) => change((e) => ({ ...e, input_overlay: { ...(e.input_overlay ?? overlayBase), ...patch } }), record);
+  // The webcam: shown by default as the settings say, until the clip has its own choice.
+  const cameraSrc = clip?.item.camera ? fileUrl(clip.item.camera) : null;
+  const cameraOffset = clip?.item.meta?.camera?.offset_ms ?? 0;
+  const cameraBase: CameraEdit = { enabled: true, corner: config.camera?.corner ?? "bottom_right", size_percent: config.camera?.size_percent ?? 25 };
+  const camera = edit?.camera ?? cameraBase;
+  const setCamera = (patch: Partial<CameraEdit>, record = true) => change((e) => ({ ...e, camera: { ...(e.camera ?? cameraBase), ...patch } }), record);
   const setTrack = (stream: number, patch: Partial<TrackEdit>) => change((e) => ({ ...e, tracks: e.tracks.map((tr) => (tr.stream === stream ? { ...tr, ...patch } : tr)) }));
   const kept = edit ? keptDuration(edit) : 0;
   const currentSegment = edit ? segmentAt(edit, timeMs) : -1;
@@ -534,6 +569,9 @@ export function Editor({ path }: { path: string }) {
               onClick={toggle}
               onError={() => void onVideoError()}
             />
+            {cameraSrc && camera.enabled && videoProblem !== "unplayable" && videoProblem !== "proxying" ? (
+              <CameraLayer src={cameraSrc} offsetMs={cameraOffset} timeMs={timeMs} playing={playing} tempo={tempo} edit={camera} frameW={pictureW} />
+            ) : null}
             {edit && loaded && spans && overlay.enabled && videoProblem !== "unplayable" && videoProblem !== "proxying" ? (
               <OverlayLayer config={overlay} spans={spans} timeMs={timeMs} frameW={pictureW} accent={cleanAccent(config.accent)} onMoveStart={remember} onMove={(x, y) => setOverlay({ x, y }, false)} />
             ) : null}
@@ -608,6 +646,39 @@ export function Editor({ path }: { path: string }) {
             </>
           ) : (
             <p className="muted small">{loaded?.inputsError ?? t("ed.noInputs")}</p>
+          )}
+
+          <h3>{t("ed.camera")}</h3>
+          {cameraSrc ? (
+            <>
+              <div className="insp-row">
+                <span>{t("ed.cameraShow")}</span>
+                <Toggle checked={camera.enabled} label={t("ed.camera")} onChange={(enabled) => setCamera({ enabled })} />
+              </div>
+              {camera.enabled ? (
+                <>
+                  <div className="insp-row">
+                    <span>{t("cam.corner")}</span>
+                    <Select<Corner>
+                      value={camera.corner}
+                      onChange={(corner) => setCamera({ corner })}
+                      options={[
+                        { value: "top_left", label: t("in.cornerTopLeft") },
+                        { value: "top_right", label: t("in.cornerTopRight") },
+                        { value: "bottom_left", label: t("in.cornerBottomLeft") },
+                        { value: "bottom_right", label: t("in.cornerBottomRight") },
+                      ]}
+                    />
+                  </div>
+                  <div className="insp-row">
+                    <span>{t("ed.size")}</span>
+                    <input type="range" min={10} max={60} step={1} value={camera.size_percent} aria-label={t("cam.size")} onPointerDown={remember} onChange={(e) => setCamera({ size_percent: Number(e.target.value) }, false)} />
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : (
+            <p className="muted small">{t("ed.cameraNone")}</p>
           )}
 
           {events.length > 0 ? (
@@ -687,7 +758,8 @@ export function Editor({ path }: { path: string }) {
           source={loaded.source}
           ranges={ranges}
           // The export works with the overlay as it is shown here, defaults included.
-          edit={loaded.inputs ? { ...edit, input_overlay: overlay } : edit}
+          edit={{ ...(loaded.inputs ? { ...edit, input_overlay: overlay } : edit), camera }}
+          camera={clip.item.camera ? { path: clip.item.camera, offsetMs: cameraOffset } : null}
           tracks={tracks}
           inputs={loaded.inputs}
           onClose={(created) => {

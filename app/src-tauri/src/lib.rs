@@ -63,6 +63,14 @@ pub fn run() {
                 window = window.focused(false).visible(mode != "hidden");
             }
             window.build()?;
+            if selftest.is_none() {
+                // Off the main thread: asking the pipe can take a moment.
+                std::thread::spawn(|| {
+                    if let Err(e) = backend::recorder_start() {
+                        eprintln!("recorder: {e}");
+                    }
+                });
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
