@@ -104,6 +104,8 @@ const NOT_A_GAME: &[&str] = &[
     // Desktop toys and wallpapers from the game stores: they run all day and would put
     // their name on every clip.
     "bongocat.exe", "bongo cat.exe", "wallpaper32.exe", "wallpaper64.exe", "desktopmate.exe",
+    // Overlays of graphics drivers open a fullscreen window of their own.
+    "nvidia overlay.exe", "nvidia share.exe", "radeonsoftware.exe", "amdrsserv.exe",
     "klip.exe", "klip-recorder.exe",
 ];
 
