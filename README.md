@@ -7,7 +7,7 @@
 A clipping and recording tool for Windows 10 and 11. A small native recorder sits in the
 tray and buffers your game on the GPU, a separate app holds the library and the editor.
 Every audio source lands on its own track, so you choose later what ends up in the export.
-No account needed, no telemetry. The cloud is optional and runs on your own server.
+No account needed, no telemetry. An optional cloud on your own server is coming soon.
 
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0b0b12)](#install)
 [![Local only](https://img.shields.io/badge/account-none-8b5cff)](#why)
@@ -191,9 +191,10 @@ Measured on an RTX 5060 and an i7-8700 at 1080p: 0.0 to 0.1 % CPU at idle withou
 about 1.5 % with all default audio tracks, 2.3 to 2.9 % with audio, detection, input capture
 and a running recording. The effect on the frame rate of a game has not been measured yet.
 
-## Klip Cloud
+## Klip Cloud (coming soon)
 
-Optional. Turn it on under **Settings, Cloud**, sign in with Discord and Klip uploads your
+The server is built, the public one is not online yet, so the Cloud page in the app is
+locked for now. Once it is: optional, turn it on under **Settings, Cloud**, sign in with Discord and Klip uploads your
 clips to a server you run yourself. Open that server on your phone, sign in with the same
 Discord account and you see every clip there, playable and downloadable. There is no phone
 app, the page works in any mobile browser.

@@ -13,7 +13,7 @@ import { actionLabel, checkHotkeys, comboFromEvent, keyCaps, withAllActions } fr
 import { LANGUAGES, t, tn } from "../lib/i18n";
 import type { Key } from "../lib/i18n";
 import { eventLabel, planCleanup } from "../lib/library";
-import { ACCENT_PRESETS, applyTheme, cleanAccent, DEFAULT_ACCENT, normalizeSettings } from "../lib/settings";
+import { ACCENT_PRESETS, applyTheme, cleanAccent, CLOUD_READY, DEFAULT_ACCENT, normalizeSettings } from "../lib/settings";
 import type { AutoClipRule, AutoClipRules, CloudMode, CloudSettings, Config, Corner, HotkeyAction, HotkeyBinding, MonitorChoice, VideoCodec } from "../lib/types";
 import { useApp } from "../state";
 import { AdvancedContext, Button, Card, Choice, Modal, NumberField, PathField, Row, Select, Toggle, useToast } from "../ui";
@@ -456,6 +456,13 @@ function CloudPage() {
   return (
     <>
       <Lead>{t("cl.lead")}</Lead>
+      {CLOUD_READY ? null : (
+        <div className="note soon-note">
+          <span className="soon-badge">{t("cl.soon")}</span>
+          <div>{t("cl.soonNote")}</div>
+        </div>
+      )}
+      <fieldset className={`cloud-fields${CLOUD_READY ? "" : " is-soon"}`} disabled={!CLOUD_READY} aria-disabled={!CLOUD_READY}>
       <Card title={t("cl.account")}>
         <Row label={t("cl.server")} help={t("cl.serverHelp")}>
           <input className="input" style={{ width: 300 }} value={server} onChange={(e) => setServer(e.target.value)} onBlur={() => server.trim() && server.trim() !== cloud.server && setCloud({ server: server.trim().replace(/\/+$/, "") })} />
@@ -488,6 +495,7 @@ function CloudPage() {
           <Button small onClick={() => void call("open_url", { url: `${cloud.server}/settings` })}>{t("cl.open")}</Button>
         </Row>
       </Card>
+      </fieldset>
       {recorder?.status?.cloud_error ? <Note warn>{t("cl.error", recorder.status.cloud_error)}</Note> : null}
     </>
   );
@@ -1090,6 +1098,7 @@ export function Settings({ page }: { page: string }) {
             <button key={p.id} type="button" className={`set-item${current.id === p.id ? " is-on" : ""}`} aria-current={current.id === p.id ? "page" : undefined} onClick={() => go({ view: "settings", page: p.id })}>
               <p.icon size={16} />
               <span>{t(p.label)}</span>
+              {p.id === "cloud" && !CLOUD_READY ? <span className="soon-badge">{t("cl.soon")}</span> : null}
             </button>
           ))}
         </nav>

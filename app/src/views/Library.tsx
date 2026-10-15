@@ -9,6 +9,7 @@ import { t, tn } from "../lib/i18n";
 import type { Key } from "../lib/i18n";
 import type { Clip, DateRange, Filters, LengthRange } from "../lib/library";
 import { countBy, eventLabel, gameLabel, groupByDay, highlightEvent, kindLabel, matches, NO_FILTERS, sortClips } from "../lib/library";
+import { CLOUD_READY } from "../lib/settings";
 import { knownThumb, requestThumb } from "../lib/thumbs";
 import type { SortKey } from "../lib/types";
 import { useApp } from "../state";
@@ -409,7 +410,7 @@ export function Library() {
       },
       ...(many ? [] : [{ label: t("lib.reveal"), icon: <FolderOpen size={15} />, onClick: () => void reveal(clip), separator: true }]),
       ...(group.some((c) => c.item.media === "video" && !c.item.meta?.cloud)
-        ? [{ label: t("cl.upload"), icon: <CloudUpload size={15} />, onClick: () => void uploadToCloud(group.filter((c) => c.item.media === "video" && !c.item.meta?.cloud)) }]
+        ? [{ label: CLOUD_READY ? t("cl.upload") : t("cl.uploadSoon"), icon: <CloudUpload size={15} />, disabled: !CLOUD_READY, onClick: () => void uploadToCloud(group.filter((c) => c.item.media === "video" && !c.item.meta?.cloud)) }]
         : []),
       ...(!many && !clip.hasSidecar && !clip.item.meta_error
         ? [{ label: t("lib.createSidecar"), icon: <Check size={15} />, onClick: () => void updateMeta(clip, {}).then(() => toast(t("lib.sidecarCreated")), (e) => toast(errorText(e), "error")) }]

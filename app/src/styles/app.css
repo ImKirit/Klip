@@ -1,5 +1,6 @@
-/* Klip design, version 3. Calm, solid surfaces with rounded corners, one accent,
-   no gradients and no glow. Readable labels instead of tiny capitals. All colours
+/* Klip design, version 3.1. Calm surfaces with rounded corners, one accent, frosted
+   glass for what floats (see the end of the file), no gradients and no glow. Readable
+   labels instead of tiny capitals. All colours
    are variables, the accent comes from config.json at runtime. */
 
 :root {
@@ -2454,4 +2455,125 @@ input[type="range"]:disabled::-webkit-slider-thumb {
 .read-button strong {
   font: 700 14px var(--f-ui);
   text-transform: none;
+}
+
+/* Glass, version 3.1. Surfaces are tinted panes instead of solid blocks, floating
+   things (menus, dialogs, notices) are frosted. On Windows 11 the window itself gets
+   Mica and the desktop shimmers through faintly (`data-glass`, set by the app). Still no
+   gradients and no glow, the colours stay those of version 3. */
+:root:not([data-theme="light"]) {
+  --p1: rgba(255, 255, 255, 0.04);
+  --p2: rgba(255, 255, 255, 0.07);
+  --p3: rgba(255, 255, 255, 0.11);
+  --line: rgba(255, 255, 255, 0.085);
+  --glass: rgba(24, 22, 36, 0.74);
+  --glass-edge: rgba(255, 255, 255, 0.13);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+:root[data-theme="light"] {
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-edge: rgba(255, 255, 255, 0.9);
+  --glass-hi: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+:root[data-glass]:not([data-theme="light"]) body {
+  background: rgba(10, 10, 15, 0.62);
+}
+
+:root[data-glass][data-theme="light"] body {
+  background: rgba(241, 241, 246, 0.7);
+}
+
+.menu,
+.modal,
+.toast,
+.selection-bar {
+  background: var(--glass);
+  border-color: var(--glass-edge);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+}
+
+.menu,
+.modal {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), var(--glass-hi);
+}
+
+.toast {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), inset 3px 0 0 var(--ac), var(--glass-hi);
+}
+
+.modal-backdrop {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.rail,
+.hud,
+.inspector,
+.group-body,
+.clip-card {
+  box-shadow: var(--glass-hi);
+}
+
+.rail,
+.hud {
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+/* The picture itself never shows the desktop through. */
+.timeline,
+.tl-heads,
+.transport {
+  background: rgba(10, 10, 15, 0.86);
+}
+
+:root[data-theme="light"] .timeline,
+:root[data-theme="light"] .tl-heads,
+:root[data-theme="light"] .transport {
+  background: rgba(241, 241, 246, 0.9);
+}
+
+/* Klip Cloud before its server is online: visible, not usable. */
+.cloud-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: contents;
+}
+
+.cloud-fields.is-soon {
+  display: block;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.soon-badge {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--p3);
+  color: var(--mu);
+  font: 600 11px var(--f-ui);
+}
+
+.soon-note {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  color: var(--tx);
+}
+
+.soon-note .soon-badge {
+  margin-left: 0;
+  background: var(--ac);
+  color: var(--ac-tx);
+}
+
+.menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
 }

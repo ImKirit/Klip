@@ -365,6 +365,12 @@ const TABLE = {
   "set.language": ["Language", "Sprache"],
   "set.backup": ["Backup", "Sichern"],
   "set.cloud": ["Cloud", "Cloud"],
+  "cl.soon": ["Soon", "Bald"],
+  "cl.soonNote": [
+    "Klip Cloud is coming soon. Everything below is ready and switches on once the server is online.",
+    "Klip Cloud kommt bald. Alles hier ist vorbereitet und wird freigeschaltet, sobald der Server online ist.",
+  ],
+  "cl.uploadSoon": ["Upload to Klip Cloud (coming soon)", "In die Klip Cloud laden (kommt bald)"],
   "cl.lead": [
     "Klip Cloud keeps clips on a server of your choice, which stores them on its own disk or in your Google Drive. Sign in with Discord here and on klip in the browser of your phone, and you see the same clips on both.",
     "Klip Cloud legt Clips auf einem Server deiner Wahl ab, der sie auf seiner Platte oder in deinem Google Drive speichert. Melde dich hier und im Browser deines Handys mit Discord an, dann siehst du auf beiden dieselben Clips.",

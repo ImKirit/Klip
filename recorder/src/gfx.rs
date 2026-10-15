@@ -5,7 +5,8 @@ use crate::Res;
 use std::collections::HashMap;
 use std::mem::ManuallyDrop;
 use windows::core::Interface;
-use windows::Win32::Foundation::{HMODULE, RECT};
+use windows::Win32::Foundation::{HANDLE, HMODULE, RECT};
+use windows::Win32::System::Threading::GetCurrentProcess;
 use windows::Win32::Graphics::Direct3D::{
     D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1,
 };
@@ -13,7 +14,7 @@ use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::Common::{
     DXGI_FORMAT_NV12, DXGI_RATIONAL, DXGI_SAMPLE_DESC,
 };
-use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIAdapter1, IDXGIFactory1};
+use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIAdapter1, IDXGIDevice, IDXGIFactory1};
 use windows::Win32::Graphics::Gdi::HMONITOR;
 
 pub struct Gfx {
@@ -106,6 +107,7 @@ pub fn create(pick: MonitorPick) -> Res<Gfx> {
         // Capture callback, encoder and video processor touch the context from different threads.
         let mt: ID3D11Multithread = context.cast()?;
         let _ = mt.SetMultithreadProtected(true);
+        raise_gpu_priority(&device);
 
         Ok(Gfx {
             device,
@@ -116,9 +118,33 @@ pub fn create(pick: MonitorPick) -> Res<Gfx> {
     }
 }
 
+/// A game that keeps the GPU at its limit makes capture and encoder wait for their turn:
+/// the game runs smoothly, the clip stutters. Like OBS, Klip asks the GPU scheduler to
+/// prefer its own work. This touches only Klip's process, never the game.
+fn raise_gpu_priority(device: &ID3D11Device) {
+    #[link(name = "gdi32")]
+    extern "system" {
+        fn D3DKMTSetProcessSchedulingPriorityClass(process: HANDLE, class: i32) -> i32;
+    }
+    const D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH: i32 = 4;
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| unsafe {
+        let status = D3DKMTSetProcessSchedulingPriorityClass(GetCurrentProcess(), D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH);
+        if status != 0 {
+            eprintln!("klip-recorder: GPU priority not raised (status {status:#x})");
+        }
+    });
+    unsafe {
+        if let Ok(dxgi) = device.cast::<IDXGIDevice>() {
+            let _ = dxgi.SetGPUThreadPriority(7);
+        }
+    }
+}
+
 /// Number of NV12 textures handed to the encoder in rotation. The async encoder keeps a
-/// texture for a few frames, so the pool must be deeper than its pipeline.
-const POOL: usize = 8;
+/// texture for a few frames and up to three more wait in front of it, so the pool must be
+/// deeper than both together.
+const POOL: usize = 12;
 
 pub struct Converter {
     video_device: ID3D11VideoDevice,

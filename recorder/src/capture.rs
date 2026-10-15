@@ -91,7 +91,9 @@ where
         let pool = Direct3D11CaptureFramePool::CreateFreeThreaded(
             &device,
             DirectXPixelFormat::B8G8R8A8UIntNormalized,
-            2,
+            // One more than the minimum, so a frame still being converted does not make
+            // Windows skip the next one.
+            3,
             size,
         )?;
         let session = pool.CreateCaptureSession(&item)?;

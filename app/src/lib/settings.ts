@@ -68,6 +68,10 @@ export function onAccent(accent: string): string {
 }
 
 /** Everything that is accent hangs on one variable, the text on it follows its brightness. */
+/** Klip Cloud is built but its server is not online yet. Until then every cloud control is
+ *  shown but cannot be used. */
+export const CLOUD_READY = false;
+
 export function applyTheme(theme: AppSettings["theme"], accent: string): void {
   const root = document.documentElement;
   const color = cleanAccent(accent);

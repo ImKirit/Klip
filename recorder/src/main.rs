@@ -591,6 +591,7 @@ fn run() -> Res<()> {
     }
 
     let mut meter = CpuMeter::new();
+    let mut ticks = 0u64;
     refresh_tray(&app, tray.as_ref());
                 refresh_overlay(&app, overlay.as_ref());
 
@@ -658,8 +659,12 @@ fn run() -> Res<()> {
                                 if let Some(p) = app.current() {
                                     // The numbers are for a console. In the log file they
                                     // would only bury the lines that matter.
+                                    // In the log file only once a minute, enough to see lost frames afterwards.
+                                    ticks += 1;
                                     if !LOG_TO_FILE.load(Ordering::Relaxed) {
                                         println!("{}", p.stat_line(&mut meter));
+                                    } else if ticks % 12 == 0 {
+                                        println!("{} {}", stamp_now(), p.stat_line(&mut meter));
                                     }
                                     if let Some(reason) = p.recording_must_stop() {
                                         eprintln!("klip-recorder: stopping the recording: {reason}");

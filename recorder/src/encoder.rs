@@ -68,9 +68,13 @@ unsafe impl Sync for Inner {}
 
 /// How many frames the transform has asked for, and the one frame waiting for a request.
 /// Both live under one lock so a request and a waiting frame can never miss each other.
+const MAX_PENDING: usize = 3;
+
 struct Feed {
     need: i32,
-    pending: Option<IMFSample>,
+    /// Frames waiting for the transform. A few may wait while the GPU is busy with a game;
+    /// beyond that the oldest is dropped. Must stay well below the converter's texture pool.
+    pending: std::collections::VecDeque<IMFSample>,
 }
 
 pub struct MfEncoder {
@@ -167,7 +171,7 @@ impl MfEncoder {
                 mft,
                 codec,
                 name,
-                feed: Mutex::new(Feed { need: 0, pending: None }),
+                feed: Mutex::new(Feed { need: 0, pending: std::collections::VecDeque::new() }),
                 stopping: std::sync::atomic::AtomicBool::new(false),
                 frames_out: AtomicU64::new(0),
                 stream_type: Mutex::new(None),
@@ -222,7 +226,12 @@ impl Encoder for MfEncoder {
                 self.inner.mft.ProcessInput(0, &sample, 0)?;
                 Ok(true)
             } else {
-                Ok(feed.pending.replace(sample).is_none())
+                let kept = feed.pending.len() < MAX_PENDING;
+                if !kept {
+                    feed.pending.pop_front();
+                }
+                feed.pending.push_back(sample);
+                Ok(kept)
             }
         }
     }
@@ -237,7 +246,7 @@ impl Encoder for MfEncoder {
 
     fn shutdown(&self) {
         self.inner.stopping.store(true, Ordering::Release);
-        self.inner.feed.lock().unwrap().pending = None;
+        self.inner.feed.lock().unwrap().pending.clear();
         unsafe {
             if let Ok(s) = self.inner.mft.cast::<IMFShutdown>() {
                 let _ = s.Shutdown();
@@ -314,7 +323,7 @@ fn event_loop<F: FnMut(Packet)>(inner: Arc<Inner>, mut on_packet: F) -> Res<()> 
             let kind = event.GetType()?;
             if kind == METransformNeedInput.0 as u32 {
                 let mut feed = inner.feed.lock().unwrap();
-                match feed.pending.take() {
+                match feed.pending.pop_front() {
                     Some(sample) => inner.mft.ProcessInput(0, &sample, 0)?,
                     None => feed.need += 1,
                 }
