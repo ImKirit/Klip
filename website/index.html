@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Klip. Clip the last minute</title>
-<meta name="description" content="Klip is a clipping and recording tool for Windows. It buffers your game on the GPU, saves the last minute on a key press and keeps every audio source on its own track. No account, no cloud.">
+<meta name="description" content="Klip is a clipping and recording tool for Windows. It buffers your game on the GPU, saves the last minute on a key press and keeps every audio source on its own track. No account needed, optional self-hosted cloud.">
 <meta property="og:title" content="Klip. Clip the last minute">
-<meta property="og:description" content="Clipping and recording for Windows. Every audio source on its own track. No account, no cloud.">
+<meta property="og:description" content="Clipping and recording for Windows. Every audio source on its own track. No account needed.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://imkirit.dev/klip/">
 <meta property="og:image" content="https://imkirit.dev/klip/img/bibliothek.png">
@@ -40,7 +40,7 @@
 <main id="top">
   <div class="hero">
     <div class="wrap">
-      <p class="lbl"><span class="dot"></span><span data-de="Windows 10 und 11 / früher Build / kein Konto">Windows 10 and 11 / early build / no account</span></p>
+      <p class="lbl"><span class="dot"></span><span data-de="Windows 10 und 11 / Beta / kein Konto nötig">Windows 10 and 11 / beta / no account needed</span></p>
       <h1 data-de-html="Clip die letzte <em>Minute.</em>">Clip the last <em>minute.</em></h1>
       <p class="lead" data-de-html="Klip puffert dein Spiel im Hintergrund auf der Grafikkarte und speichert auf Tastendruck, was gerade passiert ist. <b>Jede Tonquelle landet auf einer eigenen Spur</b>, also entscheidest du erst im Editor, ob Discord oder Musik in den Clip gehören.">Klip buffers your game in the background on the GPU and saves what just happened on a key press. <b>Every audio source lands on its own track</b>, so you decide in the editor whether Discord or music belongs in the clip.</p>
       <div class="cta">
@@ -59,7 +59,7 @@
         <div><strong>0.1<small>%</small></strong><span class="lbl" data-de="CPU im Leerlauf, gemessen">CPU at idle, measured</span></div>
         <div><strong>16</strong><span class="lbl" data-de="Tonspuren in einer Datei">audio tracks in one file</span></div>
         <div><strong>3</strong><span class="lbl">Codecs: H.264, HEVC, AV1</span></div>
-        <div><strong>0</strong><span class="lbl" data-de="Konten, Cloud, Telemetrie">accounts, cloud, telemetry</span></div>
+        <div><strong>0</strong><span class="lbl" data-de="Telemetrie, Pflichtkonten">telemetry, required accounts</span></div>
       </div>
     </div>
   </div>
@@ -158,6 +158,21 @@
         <div><span data-de="Overlay-Panel öffnen oder schließen">Open or close the overlay panel</span><span><kbd class="k">Ctrl</kbd> <kbd class="k">Shift</kbd> <kbd class="k">F5</kbd></span></div>
       </div>
       <p class="fine" data-de="Alle Tasten lassen sich ändern. Klip sagt dir, wenn eine Kombination schon von einem anderen Programm belegt ist.">Every key can be changed. Klip tells you when a combination is already taken by another program.</p>
+    </div>
+  </section>
+
+  <section id="cloud">
+    <div class="wrap">
+      <div class="sec"><span>Klip Cloud</span></div>
+      <h2 data-de="Deine Clips auf dem Handy, auf deinem Server">Your clips on your phone, on your server</h2>
+      <p class="sub" data-de="Optional und aus, bis du sie einschaltest. Melde dich mit Discord an, Klip lädt Clips auf einen Server, den du selbst betreibst. Auf dem Handy öffnest du dieselbe Adresse, meldest dich mit demselben Discord-Konto an und siehst alles. Keine App nötig.">Optional and off until you turn it on. Sign in with Discord and Klip uploads clips to a server you run yourself. On your phone, open the same address, sign in with the same Discord account and everything is there. No app needed.</p>
+      <div class="keys">
+        <div><span data-de="Was hochgeht">What goes up</span><span data-de="Nichts, ausgewählte Clips oder jeder neue Clip">Nothing, picked clips or every new clip</span></div>
+        <div><span data-de="Wo es bleibt">Where it stays</span><span data-de="PC und Cloud, oder nur Cloud">PC and cloud, or cloud only</span></div>
+        <div><span data-de="Wo die Cloud speichert">Where the cloud keeps it</span><span data-de="Auf dem Server oder in deinem Google Drive">On the server or in your Google Drive</span></div>
+        <div><span data-de="Anmeldung">Sign in</span><span data-de="Discord, auf dem PC über einen kurzen Code">Discord, on the PC through a short code</span></div>
+      </div>
+      <p class="fine" data-de="Der Server steht im Repo unter cloud/ und läuft mit Node 22 ohne weitere Pakete. Mit &quot;nur Cloud&quot; landet die Datei auf dem PC erst nach bestätigtem Upload im Papierkorb, nie endgültig gelöscht.">The server is in the repo under cloud/ and runs on Node 22 without other packages. With "cloud only" the file on the PC goes to the recycle bin only after a confirmed upload, never deleted for good.</p>
     </div>
   </section>
 

@@ -7,7 +7,7 @@
 A clipping and recording tool for Windows 10 and 11. A small native recorder sits in the
 tray and buffers your game on the GPU, a separate app holds the library and the editor.
 Every audio source lands on its own track, so you choose later what ends up in the export.
-No account, no cloud, no telemetry.
+No account needed, no telemetry. The cloud is optional and runs on your own server.
 
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0b0b12)](#install)
 [![Local only](https://img.shields.io/badge/account-none-8b5cff)](#why)
@@ -191,6 +191,24 @@ Measured on an RTX 5060 and an i7-8700 at 1080p: 0.0 to 0.1 % CPU at idle withou
 about 1.5 % with all default audio tracks, 2.3 to 2.9 % with audio, detection, input capture
 and a running recording. The effect on the frame rate of a game has not been measured yet.
 
+## Klip Cloud
+
+Optional. Turn it on under **Settings, Cloud**, sign in with Discord and Klip uploads your
+clips to a server you run yourself. Open that server on your phone, sign in with the same
+Discord account and you see every clip there, playable and downloadable. There is no phone
+app, the page works in any mobile browser.
+
+- **What goes up:** nothing, only clips you pick (right click, "Upload to Klip Cloud"), or
+  every new clip automatically.
+- **Where it stays:** on the PC and in the cloud, or only in the cloud. With "only in the
+  cloud" the local file goes to the recycle bin after a confirmed upload, never deleted for good.
+- **Where the cloud keeps it:** on the disk of the server, or in your Google Drive. With Drive
+  the server only sees the files Klip created there (`drive.file` scope), nothing else.
+- **Sign in:** the PC gets a short code to confirm in the browser, the token is stored
+  encrypted for your Windows user (DPAPI). Klip never sees your Discord password.
+
+The server is in [`cloud/`](cloud/README.md): Node 22, no dependencies, one SQLite file.
+
 ## How data is stored
 
 ```
@@ -205,6 +223,7 @@ and a running recording. The effect on the frame rate of a game has not been mea
 %APPDATA%\Klip\
 ├─ config.json     recorder settings
 ├─ app.json        app settings
+├─ cloud.json      Klip Cloud sign in, encrypted for your Windows user
 └─ sounds\         optional, your own notice sounds
 ```
 
@@ -255,8 +274,8 @@ under `app/` is Tauri 2 with React and talks to the recorder through a local nam
 ## Credits and license
 
 The notice sounds come from the "Interface Sounds" pack by [Kenney](https://www.kenney.nl),
-licensed CC0. The fonts Chakra Petch, Barlow and JetBrains Mono are bundled under the SIL
-Open Font License.
+licensed CC0. The fonts Archivo and JetBrains Mono are bundled under the SIL Open Font
+License.
 
 Klip has no license yet. Until one is added, the code is published to read and to build for
 yourself, all rights reserved.

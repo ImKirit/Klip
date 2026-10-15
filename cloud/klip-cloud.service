@@ -1,0 +1,19 @@
+[Unit]
+Description=Klip Cloud
+After=network.target
+
+[Service]
+Type=simple
+User=klip-cloud
+WorkingDirectory=/opt/klip-cloud
+EnvironmentFile=/etc/klip-cloud.env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/klip-cloud
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

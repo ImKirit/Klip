@@ -343,6 +343,19 @@ impl Backend {
             "sound_reset" => sound_reset(a),
             "recorder_status" => recorder_status(),
             "recorder_start" => recorder_start(),
+            "cloud_account" => Ok(json!({ "account": klip_cloud::account() })),
+            "cloud_link_start" => {
+                let label = format!("Klip on {}", std::env::var("COMPUTERNAME").unwrap_or_else(|_| "a PC".into()));
+                klip_cloud::start_link(str_arg(a, "server")?, &label).map(|l| json!(l))
+            }
+            "cloud_link_poll" => klip_cloud::poll_link(str_arg(a, "server")?, str_arg(a, "device_code")?).map(|p| json!(p)),
+            "cloud_sign_out" => klip_cloud::sign_out().map(|_| Value::Null),
+            "cloud_upload" => {
+                let video = in_clip_dir(str_arg(a, "path")?)?;
+                let cfg = Config::load().unwrap_or_default().cloud;
+                klip_cloud::upload(&video, &cfg).map(|r| json!(r))
+            }
+            "open_url" => open_url(str_arg(a, "url")?),
             "recorder_reload" => recorder_reload(),
             "cache_write" => cache_write(a),
             "inputs_read" => Ok(read_json(&sidecar(Path::new(str_arg(a, "path")?), "inputs.json"))?.unwrap_or(Value::Null)),
@@ -1084,6 +1097,15 @@ fn sound_reset(a: &Value) -> R {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Value::Null),
         Err(e) => Err(format!("remove the sound: {e}")),
     }
+}
+
+/// Opens a web address in the default browser. Only http and https.
+fn open_url(url: &str) -> R {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("only web addresses can be opened".into());
+    }
+    Command::new("explorer.exe").arg(url).spawn().map_err(err("open the browser"))?;
+    Ok(Value::Null)
 }
 
 /// Used by the transports to fill in an empty map when a caller sends no arguments.

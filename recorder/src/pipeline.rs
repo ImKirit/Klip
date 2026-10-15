@@ -910,6 +910,8 @@ impl Pipeline {
             monitors: Vec::new(),
             cameras: Vec::new(),
             camera: None,
+            cloud_error: None,
+            cloud_uploaded: 0,
         }
     }
 
@@ -1013,6 +1015,7 @@ impl Pipeline {
             favorite: false,
             tags: Vec::new(),
             camera: None,
+            cloud: None,
         }
     }
 }
@@ -1068,6 +1071,7 @@ fn take_screenshot(gpu: &SendGpu, texture: &ID3D11Texture2D, out_dir: &Path, gam
                 favorite: false,
                 tags: Vec::new(),
                 camera: None,
+                cloud: None,
             }
             .write_next_to(&path)?;
             Ok(path)

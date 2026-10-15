@@ -22,3 +22,6 @@ Claude/drafts/
 
 # Release files, only the newest one, never committed.
 /releases/
+
+# Klip Cloud data of local test runs.
+/cloud/data/

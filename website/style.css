@@ -187,6 +187,7 @@ h2 { font: 700 clamp(28px, 4vw, 46px)/1.05 var(--f-d); text-transform: uppercase
 @media (min-width: 860px) { .keys { grid-template-columns: 1fr 1fr; column-gap: 14px; } }
 .keys div { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 46px; padding: 8px 16px; background: var(--p1); }
 .keys span { color: var(--mu); font-size: 16px; }
+#cloud .keys span + span { color: var(--tx); text-align: right; }
 kbd.k { font: 700 12px var(--f-m); letter-spacing: 0.04em; background: var(--p3); color: var(--tx); padding: 5px 9px; white-space: nowrap; }
 
 /* Status */

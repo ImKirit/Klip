@@ -65,6 +65,18 @@ pub struct ClipMeta {
     /// The webcam, recorded as a file of its own next to the clip.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub camera: Option<CameraTrack>,
+    /// Where the clip is in Klip Cloud, once it was uploaded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cloud: Option<CloudRef>,
+}
+
+/// A clip that is in Klip Cloud: the server and its id there.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CloudRef {
+    pub server: String,
+    pub id: String,
+    /// Local time of the upload, RFC 3339.
+    pub uploaded: String,
 }
 
 /// Where the camera of a clip is and how it lines up with the clip.
@@ -302,6 +314,43 @@ impl Default for CameraConfig {
     }
 }
 
+/// Which clips go to Klip Cloud.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CloudMode {
+    /// Nothing leaves the PC.
+    Off,
+    /// Only the clips the user uploads in the app.
+    Selected,
+    /// Every new clip, automatic clip and recording, right after it is saved.
+    All,
+}
+
+/// Klip Cloud: a server of the user's choice, reached with a Discord sign in. Where the
+/// server keeps the files (its own disk or the user's Google Drive) is set on the server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CloudConfig {
+    pub mode: CloudMode,
+    /// Address of the server, for example `https://imkirit.dev/klip/cloud`.
+    pub server: String,
+    /// Keep the clip on this PC after the upload. False moves it to the recycle bin once
+    /// the server confirmed it, so the clip lives in the cloud only.
+    pub keep_local: bool,
+    /// Automatic uploads only take clips saved after this moment (RFC 3339), so turning
+    /// the mode on does not send the whole library.
+    pub since: Option<String>,
+}
+
+impl Default for CloudConfig {
+    fn default() -> Self {
+        Self { mode: CloudMode::Off, server: DEFAULT_CLOUD_SERVER.to_string(), keep_local: true, since: None }
+    }
+}
+
+/// The server of the Klip project. Anyone can run their own and enter it instead.
+pub const DEFAULT_CLOUD_SERVER: &str = "https://imkirit.dev/klip/cloud";
+
 /// A corner of the picture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -375,6 +424,8 @@ pub struct Config {
     pub monitor: MonitorChoice,
     /// The webcam, off by default.
     pub camera: CameraConfig,
+    /// Klip Cloud, off by default.
+    pub cloud: CloudConfig,
     pub language: Language,
     /// Accent colour as "#RRGGBB", shared by app, tray and overlay.
     pub accent: String,
@@ -408,6 +459,7 @@ impl Default for Config {
             region: None,
             monitor: MonitorChoice::Primary,
             camera: CameraConfig::default(),
+            cloud: CloudConfig::default(),
             language: Language::En,
             accent: DEFAULT_ACCENT.to_string(),
             cache_dir: None,
@@ -598,6 +650,12 @@ pub struct RecorderStatus {
     /// Hotkeys that could not be registered, each as one finished sentence.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hotkey_problems: Vec<String>,
+    /// Why the last automatic upload to Klip Cloud failed. Cleared by the next success.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cloud_error: Option<String>,
+    /// Clips uploaded automatically since the recorder started.
+    #[serde(default)]
+    pub cloud_uploaded: u32,
 }
 
 #[cfg(test)]

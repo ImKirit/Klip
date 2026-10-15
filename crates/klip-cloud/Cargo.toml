@@ -1,0 +1,23 @@
+[package]
+name = "klip-cloud"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+klip-core = { path = "../klip-core" }
+serde.workspace = true
+serde_json.workspace = true
+# Small blocking HTTP client. TLS through Windows itself (schannel), nothing to compile.
+ureq = { version = "2", default-features = false, features = ["native-tls", "json"] }
+native-tls = "0.2"
+base64 = "0.22"
+
+[dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+    "Win32_System_Memory",
+    "Win32_UI_Shell",
+]

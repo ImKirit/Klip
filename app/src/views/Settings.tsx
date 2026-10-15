@@ -4,7 +4,7 @@
 
 import { useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertTriangle, AudioLines, Download, Gamepad2, HardDrive, Keyboard, Languages, Layers, Moon, Palette, Plus, Share, Sparkles, Sun, Trash2, Upload, Video, X } from "lucide-react";
+import { AlertTriangle, AudioLines, Cloud, Download, Gamepad2, HardDrive, Keyboard, Languages, Layers, Moon, Palette, Plus, Share, Sparkles, Sun, Trash2, Upload, Video, X } from "lucide-react";
 import { call, errorText, isTauri, pickFile, pickSaveFile } from "../lib/api";
 import { forgetEncoderTrials, tryAllEncoders } from "../lib/export";
 import type { EncoderTrial } from "../lib/export";
@@ -14,7 +14,7 @@ import { LANGUAGES, t, tn } from "../lib/i18n";
 import type { Key } from "../lib/i18n";
 import { eventLabel, planCleanup } from "../lib/library";
 import { ACCENT_PRESETS, applyTheme, cleanAccent, DEFAULT_ACCENT, normalizeSettings } from "../lib/settings";
-import type { AutoClipRule, AutoClipRules, Config, Corner, HotkeyAction, HotkeyBinding, MonitorChoice, VideoCodec } from "../lib/types";
+import type { AutoClipRule, AutoClipRules, CloudMode, CloudSettings, Config, Corner, HotkeyAction, HotkeyBinding, MonitorChoice, VideoCodec } from "../lib/types";
 import { useApp } from "../state";
 import { AdvancedContext, Button, Card, Choice, Modal, NumberField, PathField, Row, Select, Toggle, useToast } from "../ui";
 import { Shell } from "./Shell";
@@ -30,6 +30,7 @@ const PAGES: { id: string; label: Key; icon: typeof Video }[] = [
   { id: "export", label: "set.export", icon: Share },
   { id: "appearance", label: "set.appearance", icon: Palette },
   { id: "language", label: "set.language", icon: Languages },
+  { id: "cloud", label: "set.cloud", icon: Cloud },
   { id: "backup", label: "set.backup", icon: Download },
 ];
 
@@ -409,6 +410,86 @@ function SoundsCard(props: { volume: number }) {
         </Row>
       ) : null}
     </Card>
+  );
+}
+
+const DEFAULT_CLOUD: CloudSettings = { mode: "off", server: "https://imkirit.dev/klip/cloud", keep_local: true, since: null };
+
+/** Klip Cloud: the account on a server, and which clips go there. */
+function CloudPage() {
+  const { config, set } = useConfig();
+  const { recorder } = useApp();
+  const toast = useToast();
+  const cloud = { ...DEFAULT_CLOUD, ...(config.cloud ?? {}) };
+  const setCloud = (patch: Partial<CloudSettings>) => set({ cloud: { ...cloud, ...patch } });
+  const [account, setAccount] = useState<{ server: string; name: string } | null>(null);
+  const [linking, setLinking] = useState<{ code: string } | null>(null);
+  const [server, setServer] = useState(cloud.server);
+  const load = () => call<{ account: { server: string; name: string } | null }>("cloud_account").then((r) => setAccount(r.account), () => setAccount(null));
+  useEffect(() => {
+    void load();
+  }, []);
+  const signedIn = account !== null && account.server.replace(/\/+$/, "") === cloud.server.replace(/\/+$/, "");
+
+  const signIn = async () => {
+    try {
+      const link = await call<{ device_code: string; user_code: string; verify_url: string; interval: number; expires_in: number }>("cloud_link_start", { server: cloud.server });
+      setLinking({ code: link.user_code });
+      await call("open_url", { url: link.verify_url }).catch(() => window.open(link.verify_url, "_blank"));
+      const until = Date.now() + link.expires_in * 1000;
+      while (Date.now() < until) {
+        await new Promise((r) => setTimeout(r, Math.max(2, link.interval) * 1000));
+        const poll = await call<{ state: "pending" | "done"; name?: string }>("cloud_link_poll", { server: cloud.server, device_code: link.device_code });
+        if (poll.state === "done") {
+          toast(t("cl.signedIn", poll.name ?? ""));
+          break;
+        }
+      }
+    } catch (e) {
+      toast(errorText(e), "error");
+    } finally {
+      setLinking(null);
+      void load();
+    }
+  };
+
+  return (
+    <>
+      <Lead>{t("cl.lead")}</Lead>
+      <Card title={t("cl.account")}>
+        <Row label={t("cl.server")} help={t("cl.serverHelp")}>
+          <input className="input" style={{ width: 300 }} value={server} onChange={(e) => setServer(e.target.value)} onBlur={() => server.trim() && server.trim() !== cloud.server && setCloud({ server: server.trim().replace(/\/+$/, "") })} />
+        </Row>
+        <Row label={signedIn ? t("cl.signedIn", account?.name ?? "") : t("cl.signedOut")} info={linking ? t("cl.waiting", linking.code) : undefined}>
+          {signedIn ? (
+            <Button small onClick={() => void call("cloud_sign_out").then(load)}>{t("cl.signOut")}</Button>
+          ) : (
+            <Button small kind="primary" disabled={linking !== null} onClick={() => void signIn()}>{t("cl.signIn")}</Button>
+          )}
+        </Row>
+      </Card>
+      <Card title={t("cl.what")}>
+        <Row label={t("cl.mode")} help={t("cl.modeHelp")}>
+          <Choice<CloudMode>
+            label={t("cl.mode")}
+            value={cloud.mode}
+            onChange={(mode) => setCloud({ mode, since: mode === "all" && cloud.mode !== "all" ? new Date().toISOString() : cloud.since })}
+            options={[
+              { value: "off", label: t("cl.modeOff") },
+              { value: "selected", label: t("cl.modeSelected") },
+              { value: "all", label: t("cl.modeAll") },
+            ]}
+          />
+        </Row>
+        <Row label={t("cl.keep")} help={t("cl.keepHelp")}>
+          <Toggle checked={cloud.keep_local} label={t("cl.keep")} disabled={cloud.mode === "off"} onChange={(keep_local) => setCloud({ keep_local })} />
+        </Row>
+        <Row label={t("cl.where")} help={t("cl.whereHelp")} info={recorder?.status?.cloud_uploaded ? t("cl.uploaded", recorder.status.cloud_uploaded) : undefined}>
+          <Button small onClick={() => void call("open_url", { url: `${cloud.server}/settings` })}>{t("cl.open")}</Button>
+        </Row>
+      </Card>
+      {recorder?.status?.cloud_error ? <Note warn>{t("cl.error", recorder.status.cloud_error)}</Note> : null}
+    </>
   );
 }
 
@@ -1037,6 +1118,7 @@ export function Settings({ page }: { page: string }) {
             {current.id === "export" ? <ExportPage /> : null}
             {current.id === "appearance" ? <AppearancePage /> : null}
             {current.id === "language" ? <LanguagePage /> : null}
+            {current.id === "cloud" ? <CloudPage /> : null}
             {current.id === "backup" ? <BackupPage /> : null}
           </div>
           </AdvancedContext.Provider>

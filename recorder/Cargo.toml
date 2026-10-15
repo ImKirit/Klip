@@ -6,6 +6,7 @@ publish.workspace = true
 
 [dependencies]
 klip-core = { path = "../crates/klip-core" }
+klip-cloud = { path = "../crates/klip-cloud" }
 klip-detect = { path = "../crates/klip-detect" }
 klip-games = { path = "../crates/klip-games" }
 klip-input = { path = "../crates/klip-input" }

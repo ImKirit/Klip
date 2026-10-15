@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
-import { Check, Film, FolderOpen, Image as ImageIcon, Pencil, RefreshCw, Search, Star, Tag, Trash2, X } from "lucide-react";
+import { Check, CloudUpload, Film, FolderOpen, Image as ImageIcon, Pencil, RefreshCw, Search, Star, Tag, Trash2, X } from "lucide-react";
 import { call, dragFilesOut, errorText, fileUrl } from "../lib/api";
 import { dayLabel, formatBytes, formatDuration, formatTime } from "../lib/format";
 import { t, tn } from "../lib/i18n";
@@ -154,8 +154,9 @@ const ClipCard = memo(function ClipCard({ clip, selected, selecting, onOpen, onT
         <p className="lbl clip-sub">
           <b className="clip-game">{gameLabel(clip.game)}</b> / {clip.kind === "auto_clip" ? `${t("lib.auto")}${clip.reason ? `: ${eventLabel(clip.reason)}` : ""}` : kindLabel(clip.kind)} / {formatTime(clip.created)}
         </p>
-        {clip.tags.length > 0 || !clip.hasSidecar || clip.item.has_edit ? (
+        {clip.tags.length > 0 || !clip.hasSidecar || clip.item.has_edit || clip.item.meta?.cloud ? (
           <div className="clip-tags">
+            {clip.item.meta?.cloud ? <span className="mini mini-edit" title={clip.item.meta.cloud.server}>{t("cl.inCloud")}</span> : null}
             {clip.item.has_edit ? <span className="mini mini-edit">{t("lib.edited")}</span> : null}
             {!clip.hasSidecar ? (
               <span className="mini mini-warn" title={clip.item.meta_error ?? t("lib.noSidecarHelp")}>
@@ -362,6 +363,21 @@ export function Library() {
     [updateMeta, toast],
   );
 
+  const uploadToCloud = async (list: Clip[]) => {
+    for (const clip of list) {
+      toast(t("cl.uploading", clip.title));
+      try {
+        await call("cloud_upload", { path: clip.path });
+        toast(t("cl.uploadedOne", clip.title));
+      } catch (e) {
+        const text = errorText(e);
+        toast(text.includes("not signed in") ? t("cl.notSignedIn") : text, "error");
+        break;
+      }
+    }
+    void rescan();
+  };
+
   const reveal = useCallback((clip: Clip) => call("reveal", { path: clip.path }).catch((e) => toast(errorText(e), "error")), [toast]);
 
   const dragOut = useCallback(
@@ -392,6 +408,9 @@ export function Library() {
         },
       },
       ...(many ? [] : [{ label: t("lib.reveal"), icon: <FolderOpen size={15} />, onClick: () => void reveal(clip), separator: true }]),
+      ...(group.some((c) => c.item.media === "video" && !c.item.meta?.cloud)
+        ? [{ label: t("cl.upload"), icon: <CloudUpload size={15} />, onClick: () => void uploadToCloud(group.filter((c) => c.item.media === "video" && !c.item.meta?.cloud)) }]
+        : []),
       ...(!many && !clip.hasSidecar && !clip.item.meta_error
         ? [{ label: t("lib.createSidecar"), icon: <Check size={15} />, onClick: () => void updateMeta(clip, {}).then(() => toast(t("lib.sidecarCreated")), (e) => toast(errorText(e), "error")) }]
         : []),

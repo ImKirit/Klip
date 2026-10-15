@@ -223,6 +223,9 @@ struct App {
     out: Option<PathBuf>,
     /// Hotkeys Windows refused, for the status the app reads.
     hotkey_problems: Mutex<Vec<String>>,
+    /// The automatic upload: the last error, and how many went up since the start.
+    cloud_error: Mutex<Option<String>>,
+    cloud_uploaded: AtomicU32,
     /// The game that is running right now.
     game: Mutex<Option<GameInfo>>,
     /// The clips saved last, newest first, for the overlay panel.
@@ -264,6 +267,8 @@ impl App {
     fn status(&self) -> RecorderStatus {
         let mut status = self.status_of_chain();
         status.hotkey_problems = self.hotkey_problems.lock().unwrap().clone();
+        status.cloud_error = self.cloud_error.lock().unwrap().clone();
+        status.cloud_uploaded = self.cloud_uploaded.load(Ordering::Relaxed);
         status.cameras = camera::names();
         status.camera = self.current().and_then(|p| p.camera_name());
         status.monitors = gfx::monitors()
@@ -371,6 +376,8 @@ fn run() -> Res<()> {
         cfg: Mutex::new(args.cfg.clone()),
         out: args.out.clone(),
         hotkey_problems: Mutex::new(Vec::new()),
+        cloud_error: Mutex::new(None),
+        cloud_uploaded: AtomicU32::new(0),
         game: Mutex::new(None),
         recent: Mutex::new(recent_from_disk(&args.out.clone().unwrap_or_else(|| args.cfg.clip_dir()))),
         source: Mutex::new(None),
@@ -545,6 +552,7 @@ fn run() -> Res<()> {
         }
         problems.iter().for_each(|p| println!("hotkey problem: {p}"));
         warn_hotkeys(&app, overlay.as_ref(), problems);
+        start_cloud_uploads(app.clone());
 
         // The app talks to the recorder through a pipe. Actions run right on the pipe
         // thread, only things bound to the main thread (hotkeys, leaving) are posted over.
@@ -1139,6 +1147,104 @@ fn open_library(app: &App) {
     }
 }
 
+/// Klip Cloud in the mode "all new clips": every few seconds the clip folder is checked
+/// for finished clips that are newer than the moment the mode was switched on and not in
+/// the cloud yet. A clip counts as finished once its sidecar exists, a running recording
+/// has none. Failures wait a minute, the next round tries again, nothing is lost.
+fn start_cloud_uploads(app: Arc<App>) {
+    let started = std::time::SystemTime::now();
+    let _ = std::thread::Builder::new().name("klip-cloud".into()).spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(15));
+        let cfg = app.cfg.lock().unwrap().cloud.clone();
+        if cfg.mode != klip_core::CloudMode::All || klip_cloud::account().is_none() {
+            continue;
+        }
+        let since = cfg
+            .since
+            .as_deref()
+            .and_then(parse_rfc3339)
+            .unwrap_or(started);
+        for video in cloud_candidates(&app.out_dir(), since) {
+            match klip_cloud::upload(&video, &cfg) {
+                Ok(done) => {
+                    println!("cloud: {} uploaded as {}", video.display(), done.id);
+                    app.cloud_uploaded.fetch_add(1, Ordering::Relaxed);
+                    *app.cloud_error.lock().unwrap() = None;
+                }
+                Err(e) => {
+                    eprintln!("klip-recorder: cloud upload of {} failed: {e}", video.display());
+                    *app.cloud_error.lock().unwrap() = Some(e);
+                    std::thread::sleep(Duration::from_secs(60));
+                    break;
+                }
+            }
+        }
+    });
+}
+
+/// Finished videos in the clip folder, saved after `since`, not in the cloud yet. Oldest
+/// first, so the order in the cloud matches the order of saving.
+fn cloud_candidates(dir: &Path, since: std::time::SystemTime) -> Vec<PathBuf> {
+    fn walk(dir: &Path, depth: u32, since: std::time::SystemTime, out: &mut Vec<(std::time::SystemTime, PathBuf)>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            let Ok(meta) = entry.metadata() else { continue };
+            if meta.is_dir() {
+                if depth < 3 && !name.starts_with('.') && name != "exporte" {
+                    walk(&path, depth + 1, since, out);
+                }
+                continue;
+            }
+            if !name.ends_with(".mp4") || name.ends_with(".cam.mp4") {
+                continue;
+            }
+            let Ok(modified) = meta.modified() else { continue };
+            if modified < since {
+                continue;
+            }
+            let Some(sidecar) = read_json::<klip_core::ClipMeta>(&klip_core::ClipMeta::sidecar_path(&path)) else { continue };
+            if sidecar.cloud.is_none() {
+                out.push((modified, path));
+            }
+        }
+    }
+    let mut found = Vec::new();
+    walk(dir, 0, since, &mut found);
+    found.sort_by(|a, b| a.0.cmp(&b.0));
+    found.into_iter().map(|(_, p)| p).collect()
+}
+
+/// "2026-10-15T20:00:00+02:00" or with "Z" as a point in time. Seconds are enough.
+fn parse_rfc3339(text: &str) -> Option<std::time::SystemTime> {
+    let b = text.as_bytes();
+    if b.len() < 19 {
+        return None;
+    }
+    let n = |r: std::ops::Range<usize>| text.get(r)?.parse::<i64>().ok();
+    let (y, mo, d, h, mi, s) = (n(0..4)?, n(5..7)?, n(8..10)?, n(11..13)?, n(14..16)?, n(17..19)?);
+    let rest = &text[19..];
+    let rest = rest.trim_start_matches(|c: char| c == '.' || c.is_ascii_digit());
+    let offset = if rest.is_empty() || rest.starts_with('Z') {
+        0
+    } else {
+        let sign = if rest.starts_with('-') { -1 } else { 1 };
+        let oh: i64 = rest.get(1..3)?.parse().ok()?;
+        let om: i64 = rest.get(4..6)?.parse().ok()?;
+        sign * (oh * 3600 + om * 60)
+    };
+    // Days since 1970 of a calendar date (Howard Hinnant's algorithm).
+    let (yy, mm) = if mo <= 2 { (y - 1, mo + 9) } else { (y, mo - 3) };
+    let era = yy.div_euclid(400);
+    let yoe = yy - era * 400;
+    let doy = (153 * mm + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    let secs = days * 86_400 + h * 3600 + mi * 60 + s - offset;
+    (secs >= 0).then(|| std::time::UNIX_EPOCH + Duration::from_secs(secs as u64))
+}
+
 /// Opens a clip in the editor of the app. Without the app next to the recorder the clip
 /// opens in the player Windows has for it.
 fn open_in_app(app: &App, clip: &Path) {
@@ -1300,4 +1406,18 @@ pub(crate) fn memory_mb() -> (f64, f64) {
         );
     }
     (pmc.WorkingSetSize as f64 / 1_048_576.0, pmc.PrivateUsage as f64 / 1_048_576.0)
+}
+
+#[cfg(test)]
+mod cloud_tests {
+    use super::*;
+
+    #[test]
+    fn rfc3339_times() {
+        let t = |s: &str| parse_rfc3339(s).map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
+        assert_eq!(t("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(t("2026-10-15T20:00:00+02:00"), Some(1_792_087_200));
+        assert_eq!(t("2026-10-15T18:00:00.123Z"), Some(1_792_087_200));
+        assert_eq!(t("nonsense"), None);
+    }
 }

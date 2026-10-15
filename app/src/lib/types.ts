@@ -32,6 +32,8 @@ export interface ClipMeta {
   tags: string[];
   /** The webcam as a file of its own next to the clip. */
   camera?: { file: string; offset_ms: number };
+  /** Where the clip is in Klip Cloud, once uploaded. */
+  cloud?: { server: string; id: string; uploaded: string };
 }
 
 /** One file of the clip folder as the backend reports it. */
@@ -84,6 +86,14 @@ export interface AudioConfig {
   apps: AppTrack[];
 }
 
+export type CloudMode = "off" | "selected" | "all";
+export interface CloudSettings {
+  mode: CloudMode;
+  server: string;
+  keep_local: boolean;
+  since?: string | null;
+}
+
 /** Which monitor the recorder takes. The index counts the recorder's list, main monitor is 0. */
 export type MonitorChoice = { type: "primary" } | { type: "game" } | { type: "index"; index: number } | { type: "all" };
 
@@ -107,6 +117,9 @@ export interface RecorderStatus {
   cameras?: string[];
   /** The camera that is running. */
   camera?: string;
+  /** Why the last automatic upload failed. */
+  cloud_error?: string;
+  cloud_uploaded?: number;
   /** Hotkeys Windows refused, one sentence each. */
   hotkey_problems?: string[];
 }
@@ -133,6 +146,8 @@ export interface Config {
   region: [number, number, number, number] | null;
   /** Which monitor is recorded. Missing in files of older versions, then the main one. */
   monitor?: MonitorChoice;
+  /** Klip Cloud. Missing in files of older versions, then off. */
+  cloud?: CloudSettings;
   /** The webcam. Missing in files of older versions, then off. */
   camera?: { enabled: boolean; device: string | null; corner: Corner; size_percent: number };
   /** Language of every visible text: "en" or "de". */
