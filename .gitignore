@@ -19,3 +19,6 @@ Claude/drafts/
 /assets/sounds/packs/
 /assets/sounds/candidates/
 /assets/sounds/variants/
+
+# Release files, only the newest one, never committed.
+/releases/
