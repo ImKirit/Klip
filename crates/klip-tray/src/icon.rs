@@ -1,5 +1,5 @@
-//! Tray icons drawn in code: the Klip. logo, a K of round strokes on a violet square,
-//! whose dot shows the state. No image files, so nothing can go missing next to the exe.
+//! Tray icons drawn in code: the Klip. logo, a white bar and a triangle pointing back on a
+//! dark square. The triangle shows the state. No image files, so nothing can go missing.
 
 use windows::Win32::UI::WindowsAndMessaging::{CreateIcon, HICON};
 
@@ -7,14 +7,14 @@ use windows::Win32::UI::WindowsAndMessaging::{CreateIcon, HICON};
 pub struct Rgb(pub u8, pub u8, pub u8);
 
 impl Rgb {
-    /// The dot while the buffer runs: white, like the K.
-    pub const ACCENT: Rgb = Rgb(0xFF, 0xFF, 0xFF);
-    /// The dot while a recording runs (`#FF3B4E`).
+    /// The triangle while the buffer runs: the violet of the logo (`#8B5CFF`).
+    pub const ACCENT: Rgb = Rgb(0x8B, 0x5C, 0xFF);
+    /// The triangle while a recording runs (`#FF3B4E`).
     pub const RECORDING: Rgb = Rgb(0xFF, 0x3B, 0x4E);
-    /// Nothing runs: the logo without its dot.
-    pub const IDLE: Rgb = Rgb(0x9A, 0x99, 0x8F);
-    /// The square behind the K (`#8B5CFF`).
-    pub const LOGO: Rgb = Rgb(0x8B, 0x5C, 0xFF);
+    /// Nothing runs: a grey triangle.
+    pub const IDLE: Rgb = Rgb(0x6E, 0x6B, 0x80);
+    /// The square behind the mark (`#16141F`).
+    pub const BACK: Rgb = Rgb(0x16, 0x14, 0x1F);
 }
 
 /// Samples per pixel edge for smooth edges.
@@ -22,32 +22,49 @@ const SAMPLES: u32 = 4;
 
 // The logo in units of a 512 square, as in assets/logo/klip-logo.svg.
 const CORNER: f32 = 120.0;
-const STROKE: f32 = 33.0;
-const SEGMENTS: [((f32, f32), (f32, f32)); 3] = [((158.0, 142.0), (158.0, 370.0)), ((320.0, 142.0), (180.0, 266.0)), ((226.0, 228.0), (322.0, 370.0))];
-const DOT: (f32, f32, f32) = (392.0, 370.0, 33.0);
+const BAR: (f32, f32, f32, f32, f32) = (130.0, 112.0, 200.0, 400.0, 35.0);
+/// The triangle with its rounded corners, as a polygon.
+const TRIANGLE: [(f32, f32); 9] = [
+    (236.0, 256.0),
+    (360.0, 128.0),
+    (380.0, 118.0),
+    (398.0, 126.0),
+    (404.0, 146.0),
+    (404.0, 366.0),
+    (398.0, 386.0),
+    (380.0, 394.0),
+    (360.0, 384.0),
+];
 
-fn in_rounded_square(x: f32, y: f32) -> bool {
-    if !(0.0..=512.0).contains(&x) || !(0.0..=512.0).contains(&y) {
+fn in_rounded_rect(x: f32, y: f32, l: f32, t: f32, r: f32, b: f32, radius: f32) -> bool {
+    if x < l || x > r || y < t || y > b {
         return false;
     }
-    let cx = x.clamp(CORNER, 512.0 - CORNER);
-    let cy = y.clamp(CORNER, 512.0 - CORNER);
-    (x - cx).powi(2) + (y - cy).powi(2) <= CORNER * CORNER
+    let cx = x.clamp(l + radius, r - radius);
+    let cy = y.clamp(t + radius, b - radius);
+    (x - cx).powi(2) + (y - cy).powi(2) <= radius * radius
 }
 
-fn near_segment(x: f32, y: f32, a: (f32, f32), b: (f32, f32)) -> bool {
-    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
-    let t = (((x - a.0) * dx + (y - a.1) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
-    let (px, py) = (a.0 + t * dx, a.1 + t * dy);
-    (x - px).powi(2) + (y - py).powi(2) <= STROKE * STROKE
+fn in_triangle(x: f32, y: f32) -> bool {
+    let mut inside = false;
+    let mut j = TRIANGLE.len() - 1;
+    for i in 0..TRIANGLE.len() {
+        let (xi, yi) = TRIANGLE[i];
+        let (xj, yj) = TRIANGLE[j];
+        if (yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
 }
 
 /// The logo as `size` x `size` pixels, four bytes each in the order blue, green, red,
-/// alpha, alpha not premultiplied. `dot` colours the dot, `Rgb::IDLE` leaves it out.
-pub fn dot_pixels(size: u32, dot: Rgb) -> Vec<u8> {
+/// alpha, alpha not premultiplied. `state` colours the triangle.
+pub fn dot_pixels(size: u32, state: Rgb) -> Vec<u8> {
     let mut pixels = vec![0u8; (size * size * 4) as usize];
     let unit = 512.0 / size as f32;
-    let n = (SAMPLES * SAMPLES) as u32;
+    let n = SAMPLES * SAMPLES;
     for y in 0..size {
         for x in 0..size {
             let (mut r, mut g, mut b, mut covered) = (0u32, 0u32, 0u32, 0u32);
@@ -55,17 +72,16 @@ pub fn dot_pixels(size: u32, dot: Rgb) -> Vec<u8> {
                 for sx in 0..SAMPLES {
                     let px = (x as f32 + (sx as f32 + 0.5) / SAMPLES as f32) * unit;
                     let py = (y as f32 + (sy as f32 + 0.5) / SAMPLES as f32) * unit;
-                    if !in_rounded_square(px, py) {
+                    if !in_rounded_rect(px, py, 0.0, 0.0, 512.0, 512.0, CORNER) {
                         continue;
                     }
                     covered += 1;
-                    let on_dot = dot != Rgb::IDLE && (px - DOT.0).powi(2) + (py - DOT.1).powi(2) <= DOT.2 * DOT.2;
-                    let c = if on_dot {
-                        dot
-                    } else if SEGMENTS.iter().any(|(a, b)| near_segment(px, py, *a, *b)) {
+                    let c = if in_rounded_rect(px, py, BAR.0, BAR.1, BAR.2, BAR.3, BAR.4) {
                         Rgb(0xFF, 0xFF, 0xFF)
+                    } else if in_triangle(px, py) {
+                        state
                     } else {
-                        Rgb::LOGO
+                        Rgb::BACK
                     };
                     r += c.0 as u32;
                     g += c.1 as u32;
@@ -107,7 +123,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn logo_has_clear_corners_a_white_k_and_a_coloured_dot() {
+    fn logo_has_clear_corners_a_white_bar_and_a_state_triangle() {
         let size = 32;
         let pixels = dot_pixels(size, Rgb::RECORDING);
         let at = |x: u32, y: u32| {
@@ -116,14 +132,14 @@ mod tests {
         };
         assert_eq!(at(0, 0).3, 0);
         assert_eq!(at(31, 31).3, 0);
-        // The middle of the stem of the K is white, the dot red, the square violet.
-        assert_eq!(at(9, 16), (0xFF, 0xFF, 0xFF, 255));
-        assert_eq!(at(24, 23), (0xFF, 0x3B, 0x4E, 255));
-        assert_eq!(at(16, 4), (0x8B, 0x5C, 0xFF, 255));
-        // Without a state the dot is gone, the square shows through.
+        // The middle of the bar is white, the triangle red, the square dark.
+        assert_eq!(at(10, 16), (0xFF, 0xFF, 0xFF, 255));
+        assert_eq!(at(22, 16), (0xFF, 0x3B, 0x4E, 255));
+        assert_eq!(at(16, 3), (0x16, 0x14, 0x1F, 255));
+        // Another state, another triangle.
         let idle = dot_pixels(size, Rgb::IDLE);
-        let i = ((23 * size + 24) * 4) as usize;
-        assert_eq!((idle[i + 2], idle[i + 1], idle[i]), (0x8B, 0x5C, 0xFF));
+        let i = ((16 * size + 22) * 4) as usize;
+        assert_eq!((idle[i + 2], idle[i + 1], idle[i]), (0x6E, 0x6B, 0x80));
     }
 
     #[test]

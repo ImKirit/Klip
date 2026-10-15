@@ -214,3 +214,7 @@ footer .sp { flex: 1; }
 footer p { font-size: 14px; color: var(--dim); flex-basis: 100%; max-width: 80ch; }
 
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .btn { transition: none; } }
+
+.mark { display: inline-flex; align-items: center; gap: 10px; }
+.mark img { border-radius: 8px; }
+.mark i { right: 0; }
