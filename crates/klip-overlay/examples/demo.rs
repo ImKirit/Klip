@@ -37,7 +37,7 @@ fn project_root() -> PathBuf {
 fn app_fonts() -> Vec<PathBuf> {
     let base = project_root().join("app/node_modules/@fontsource");
     let mut files = Vec::new();
-    for family in ["chakra-petch", "barlow", "jetbrains-mono"] {
+    for family in ["archivo", "jetbrains-mono"] {
         for file in font_files_in(&base.join(family).join("files")) {
             let name = file.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
             let wanted = ["400", "500", "600", "700"].iter().any(|w| name == format!("{family}-latin-{w}-normal.woff2"));
@@ -108,12 +108,13 @@ fn write_pngs(fonts: &[PathBuf]) {
         let path = dir.join(name);
         match render_png(state, options, &path) {
             Ok(f) => println!(
-                "png: {} (ui font: {}, files ok {} failed {} {})",
+                "png: {} (ui font: {}, files ok {} failed {} {} families {:?})",
                 path.display(),
                 f.ui,
                 f.files_loaded,
                 f.files_failed,
-                f.first_error
+                f.first_error,
+                f.families
             ),
             Err(e) => println!("png: FAILED {e}"),
         }

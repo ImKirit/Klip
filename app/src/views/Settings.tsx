@@ -2,7 +2,7 @@
 // recorder reads, or to app.json, which only the app uses. Things the recorder cannot
 // do yet have no page. The rules of the auto clips live in a file of their own, autoclip.json.
 
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { AlertTriangle, AudioLines, Download, Gamepad2, HardDrive, Keyboard, Languages, Layers, Moon, Palette, Plus, Share, Sparkles, Sun, Trash2, Upload, Video, X } from "lucide-react";
 import { call, errorText, isTauri, pickFile, pickSaveFile } from "../lib/api";
@@ -16,7 +16,7 @@ import { eventLabel, planCleanup } from "../lib/library";
 import { ACCENT_PRESETS, applyTheme, cleanAccent, DEFAULT_ACCENT, normalizeSettings } from "../lib/settings";
 import type { AutoClipRule, AutoClipRules, Config, Corner, HotkeyAction, HotkeyBinding, MonitorChoice, VideoCodec } from "../lib/types";
 import { useApp } from "../state";
-import { Button, Card, Choice, Modal, NumberField, PathField, Row, Select, Toggle, useToast } from "../ui";
+import { AdvancedContext, Button, Card, Choice, Modal, NumberField, PathField, Row, Select, Toggle, useToast } from "../ui";
 import { Shell } from "./Shell";
 
 const PAGES: { id: string; label: Key; icon: typeof Video }[] = [
@@ -33,13 +33,22 @@ const PAGES: { id: string; label: Key; icon: typeof Video }[] = [
   { id: "backup", label: "set.backup", icon: Download },
 ];
 
+/** A longer remark. Only warnings show all the time, the rest with "More options". */
 function Note(props: { children: ReactNode; warn?: boolean }) {
+  const advanced = useContext(AdvancedContext);
+  if (!props.warn && !advanced) return null;
   return (
     <div className={`note${props.warn ? " note-warn" : ""}`}>
       <span className="lbl">{props.warn ? t("common.warning") : t("common.note")}</span>
       <div>{props.children}</div>
     </div>
   );
+}
+
+/** The introduction of a page. Shown with "More options", the pages speak for themselves. */
+function Lead(props: { children: ReactNode }) {
+  const advanced = useContext(AdvancedContext);
+  return advanced ? <p className="settings-lead">{props.children}</p> : null;
 }
 
 function useConfig() {
@@ -82,10 +91,10 @@ function RecordingPage() {
             {config.buffer_seconds % 60 > 0 || minutes === 0 ? `${config.buffer_seconds % 60} s` : ""}
           </span>
         </Row>
-        <Row label={t("rec.onDisk")} help={t("rec.onDiskHelp", formatBytes(bufferMb * 1024 * 1024))}>
+        <Row advanced label={t("rec.onDisk")} help={t("rec.onDiskHelp", formatBytes(bufferMb * 1024 * 1024))}>
           <Toggle checked={config.buffer_on_disk} label={t("rec.onDisk")} onChange={(buffer_on_disk) => set({ buffer_on_disk })} />
         </Row>
-        <Row label={t("rec.maxRecording")} help={t("rec.maxRecordingHelp")}>
+        <Row advanced label={t("rec.maxRecording")} help={t("rec.maxRecordingHelp")}>
           <NumberField label={t("rec.maxRecordingLabel")} value={config.max_recording_minutes} min={0} max={1440} unit="min" onChange={(max_recording_minutes) => set({ max_recording_minutes })} />
         </Row>
       </Card>
@@ -101,16 +110,16 @@ function RecordingPage() {
         <Row label={t("rec.fps")}>
           <Select<number> label={t("rec.fps")} value={config.fps} onChange={(fps) => set({ fps })} options={[...new Set([30, 60, 120, 144, 240, config.fps])].sort((a, b) => a - b).map((f) => ({ value: f, label: `${f} fps` }))} />
         </Row>
-        <Row label={t("rec.bitrate")} help={t("rec.bitrateHelp")}>
+        <Row advanced label={t("rec.bitrate")} help={t("rec.bitrateHelp")}>
           <NumberField label={t("rec.bitrateLabel")} value={config.bitrate_kbps} min={500} max={200000} unit="kbit/s" onChange={(bitrate_kbps) => set({ bitrate_kbps })} />
         </Row>
-        <Row label={t("rec.codec")} help={t("rec.codecHelp")}>
+        <Row advanced label={t("rec.codec")} help={t("rec.codecHelp")}>
           <Select<VideoCodec> label={t("rec.codec")} value={config.codec} onChange={(codec) => set({ codec })} options={[{ value: "h264", label: "H.264" }, { value: "hevc", label: "HEVC" }, { value: "av1", label: "AV1" }]} />
         </Row>
-        <Row label={t("rec.cursor")}>
+        <Row advanced label={t("rec.cursor")}>
           <Toggle checked={config.capture_cursor} label={t("rec.cursor")} onChange={(capture_cursor) => set({ capture_cursor })} />
         </Row>
-        <Row stacked label={t("rec.region")} help={t("rec.regionHelp")}>
+        <Row advanced stacked label={t("rec.region")} help={t("rec.regionHelp")}>
           <RegionField value={config.region} onChange={(region) => set({ region })} />
         </Row>
       </Card>
@@ -167,7 +176,7 @@ function AudioPage() {
   const setApp = (index: number, patch: Partial<Config["audio"]["apps"][number]>) => setAudio({ apps: audio.apps.map((a, i) => (i === index ? { ...a, ...patch } : a)) });
   return (
     <>
-      <p className="settings-lead">{t("audio.lead")}</p>
+      <Lead>{t("audio.lead")}</Lead>
       <RestartNote />
       <Card title={t("audio.tracks")}>
         <Row label={t("audio.record")} help={t("audio.recordHelp")}>
@@ -236,13 +245,13 @@ function OverlayPage() {
   const off = !overlay.enabled;
   return (
     <>
-      <p className="settings-lead">{t("ov.lead")}</p>
+      <Lead>{t("ov.lead")}</Lead>
       <Note>{t("ov.startNote")}</Note>
       <Card title={t("ov.inGame")}>
         <Row label={t("ov.enable")} help={t("ov.enableHelp")}>
           <Toggle checked={overlay.enabled} label={t("ov.enable")} onChange={(enabled) => setOverlay({ enabled })} />
         </Row>
-        <Row label={t("ov.indicator")} help={t("ov.indicatorHelp")}>
+        <Row advanced label={t("ov.indicator")} help={t("ov.indicatorHelp")}>
           <Toggle checked={overlay.indicator} label={t("ov.indicator")} disabled={off} onChange={(indicator) => setOverlay({ indicator })} />
         </Row>
         <Row label={t("ov.toasts")} help={t("ov.toastsHelp")}>
@@ -287,7 +296,7 @@ function CameraCard(props: { value: NonNullable<Config["camera"]>; onChange: (va
       <Row label={t("cam.enabled")} help={t("cam.enabledHelp")}>
         <Toggle checked={cam.enabled} label={t("cam.enabled")} onChange={(enabled) => set({ enabled })} />
       </Row>
-      <Row label={t("cam.device")} help={recorder?.status?.camera ? t("cam.running", recorder.status.camera) : known.length === 0 && recorder?.connected ? t("cam.none") : undefined}>
+      <Row label={t("cam.device")} info={recorder?.status?.camera ? t("cam.running", recorder.status.camera) : known.length === 0 && recorder?.connected ? t("cam.none") : undefined}>
         <Select
           label={t("cam.device")}
           value={cam.device ?? ""}
@@ -386,16 +395,16 @@ function SoundsCard(props: { volume: number }) {
   const reset = (name: string) => call("sound_reset", { name }).then(load, (e) => toast(errorText(e), "error"));
   return (
     <Card title={t("ov.sounds")}>
-      <p className="muted small">{t("ov.soundsHelp")}</p>
+      <Lead>{t("ov.soundsHelp")}</Lead>
       {SOUND_NAMES.map((name) => (
-        <Row key={name} label={t(("ov.snd." + name) as Key)} help={custom[name] ? t("ov.sndOwn") : t("ov.sndBuiltIn")}>
+        <Row key={name} label={t(("ov.snd." + name) as Key)} info={custom[name] ? t("ov.sndOwn") : t("ov.sndBuiltIn")}>
           <Button small onClick={() => void play(name)}>{t("ov.sndPlay")}</Button>
           <Button small onClick={() => void choose(name)}>{t("ov.sndChoose")}</Button>
           {custom[name] ? <Button small kind="ghost" onClick={() => void reset(name)}>{t("ov.sndReset")}</Button> : null}
         </Row>
       ))}
       {dir ? (
-        <Row label={t("ov.sndFolder")} help={dir}>
+        <Row advanced label={t("ov.sndFolder")} info={dir}>
           <Button small kind="ghost" onClick={() => void call("reveal", { path: dir }).catch((e) => toast(errorText(e), "error"))}>{t("ov.sndFolder")}</Button>
         </Row>
       ) : null}
@@ -409,10 +418,10 @@ function InputPage() {
   const setInput = (patch: Partial<Config["input"]>) => set({ input: { ...input, ...patch } });
   return (
     <>
-      <p className="settings-lead">{t("in.lead")}</p>
+      <Lead>{t("in.lead")}</Lead>
       <Note>{t("in.privacy")}</Note>
       <Card title={t("in.track")}>
-        <Row label={t("in.capture")} help={t("in.captureHelp")}>
+        <Row advanced label={t("in.capture")} help={t("in.captureHelp")}>
           <Toggle checked={input.enabled} label={t("in.capture")} onChange={(enabled) => setInput({ enabled })} />
         </Row>
       </Card>
@@ -469,7 +478,7 @@ function AutoClipsPage() {
 
   return (
     <>
-      <p className="settings-lead">{t("ac.lead")}</p>
+      <Lead>{t("ac.lead")}</Lead>
       <Note warn>{t("ac.warning")}</Note>
       <Card>
         <Row label={t("set.autoclips")} help={t("ac.enableHelp")}>
@@ -507,7 +516,7 @@ function AutoClipsPage() {
             })}
           </Card>
           <Note>{t("ac.multiNote")}</Note>
-          <Card title={t("ac.build")}>
+          <Card advanced title={t("ac.build")}>
             <Row label={t("ac.merge")} help={t("ac.mergeHelp")}>
               <NumberField label={t("ac.mergeLabel")} value={file.rules.merge_gap_s} min={0} max={600} unit="s" disabled={off} onChange={(merge_gap_s) => save({ ...file.rules, merge_gap_s })} />
             </Row>
@@ -561,7 +570,7 @@ function HotkeysPage() {
 
   return (
     <>
-      <p className="settings-lead">{t("hk.lead")}</p>
+      <Lead>{t("hk.lead")}</Lead>
       {conflicts > 0 ? (
         <Note warn>
           {tn("hk.conflicts", conflicts)} {t("hk.conflictsRule")}
@@ -654,7 +663,7 @@ function CacheCard() {
   const options = [...new Set([...drives, drive])].sort();
 
   return (
-    <Card title={t("cache.title")}>
+    <Card advanced title={t("cache.title")}>
       <Row label={t("cache.location")} help={t("cache.locationHelp")}>
         <Choice<CacheMode>
           label={t("cache.location")}
@@ -716,14 +725,14 @@ function StoragePage() {
         <Row stacked label={t("st.location")} help={env.clip_dir_from_env ? t("st.locationEnv") : t("st.locationHelp")}>
           <PathField label={t("st.clipFolder")} value={config.clip_dir ?? ""} placeholder={env.default_clip_dir} pick="folder" onChange={(dir) => set({ clip_dir: dir === "" ? null : dir })} />
         </Row>
-        <Row label={t("st.used")} help={disk ? t("hud.diskHelp", formatBytes(disk.free), formatBytes(disk.total)) : undefined}>
+        <Row label={t("st.used")} info={disk ? t("hud.diskHelp", formatBytes(disk.free), formatBytes(disk.total)) : undefined}>
           <span className="mono">{tn("st.usedValue", clips.length, formatBytes(used))}</span>
         </Row>
-        <Row label={t("st.limit")} help={t("st.limitHelp")}>
+        <Row advanced label={t("st.limit")} help={t("st.limitHelp")}>
           <NumberField label={t("st.limitLabel")} value={settings.storage_limit_gb} min={0} max={100000} unit="GB" onChange={(storage_limit_gb) => void saveSettings({ ...settings, storage_limit_gb })} />
         </Row>
       </Card>
-      <Card title={t("st.cleanup")}>
+      <Card advanced title={t("st.cleanup")}>
         <Row label={t("st.cleanupOnStart")} help={t("st.cleanupHelp")}>
           <Toggle checked={rules.enabled} label={t("st.cleanup")} onChange={(enabled) => setRules({ enabled })} />
         </Row>
@@ -733,7 +742,7 @@ function StoragePage() {
         <Row label={t("st.largerThan")} help={t("st.largerThanHelp")}>
           <NumberField label={t("st.largerThanLabel")} value={rules.max_size_gb} min={0} max={100000} step={0.1} unit="GB" onChange={(max_size_gb) => setRules({ max_size_gb })} />
         </Row>
-        <Row label={t("st.now")} help={plan.remove.length === 0 ? t("st.nothing") : t("st.nowHelp", plan.remove.length, formatBytes(plan.bytes), clips.filter((c) => c.favorite).length)}>
+        <Row label={t("st.now")} info={plan.remove.length === 0 ? t("st.nothing") : t("st.nowHelp", plan.remove.length, formatBytes(plan.bytes), clips.filter((c) => c.favorite).length)}>
           <Button icon={<Trash2 size={15} />} disabled={plan.remove.length === 0} onClick={() => setConfirm(true)}>{t("st.cleanNow")}</Button>
         </Row>
       </Card>
@@ -803,11 +812,11 @@ function ExportPage() {
         <Row label={t("exs.found")}>
           <span className={`mono small found${info && !info.ok ? " error-text" : ""}`}>{info === null ? t("exs.checking") : info.ok ? info.version : t("exs.notStartable", info.version)}</span>
         </Row>
-        <Row stacked label={t("exs.dir")} help={t("exs.dirHelp")}>
+        <Row advanced stacked label={t("exs.dir")} help={t("exs.dirHelp")}>
           <PathField label={t("exs.dir")} value={settings.export_dir} placeholder={env.export_dir} pick="folder" onChange={(export_dir) => void saveSettings({ ...settings, export_dir })} />
         </Row>
       </Card>
-      <Card title={t("exs.encoders")} aside={<Button small disabled={testing} onClick={() => void test()}>{testing ? t("exs.running") : t("exs.startTrial")}</Button>}>
+      <Card advanced title={t("exs.encoders")} aside={<Button small disabled={testing} onClick={() => void test()}>{testing ? t("exs.running") : t("exs.startTrial")}</Button>}>
         <p className="muted group-text">{t("exs.encodersText")}</p>
         {trials ? (
           <table className="table">
@@ -871,7 +880,7 @@ function AppearancePage() {
         </Row>
       </Card>
       <Card title={t("ap.mode")}>
-        <Row label={t("ap.mode")} help={t("ap.modeHelp")}>
+        <Row advanced label={t("ap.mode")} help={t("ap.modeHelp")}>
           <Choice<"dark" | "light">
             label={t("ap.mode")}
             value={settings.theme}
@@ -882,7 +891,7 @@ function AppearancePage() {
             ]}
           />
         </Row>
-        <Row label={t("ap.reset")}>
+        <Row advanced label={t("ap.reset")}>
           <Button
             disabled={accent === DEFAULT_ACCENT && settings.theme === "dark"}
             onClick={() => {
@@ -903,7 +912,7 @@ function LanguagePage() {
   const { set } = useConfig();
   return (
     <>
-      <p className="settings-lead">{t("lang.lead")}</p>
+      <Lead>{t("lang.lead")}</Lead>
       <Card title={t("set.language")}>
         <div className="lang-grid" role="radiogroup" aria-label={t("set.language")}>
           {LANGUAGES.map((l) => (
@@ -951,7 +960,7 @@ function BackupPage() {
   };
   return (
     <>
-      <p className="settings-lead">{t("bk.lead")}</p>
+      <Lead>{t("bk.lead")}</Lead>
       <Card title={t("bk.file")}>
         {isTauri ? null : (
           <Row stacked label={t("bk.file")} help={t("bk.fileHelp")}>
@@ -972,9 +981,26 @@ function BackupPage() {
   );
 }
 
+function loadAdvanced(): boolean {
+  try {
+    return localStorage.getItem("klip.settings.advanced") === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function Settings({ page }: { page: string }) {
   const { go, configError } = useApp();
   const current = PAGES.find((p) => p.id === page) ?? PAGES[0];
+  const [advanced, setAdvancedState] = useState(loadAdvanced);
+  const setAdvanced = (on: boolean) => {
+    setAdvancedState(on);
+    try {
+      localStorage.setItem("klip.settings.advanced", on ? "1" : "0");
+    } catch {
+      // Without storage the choice lasts as long as the window.
+    }
+  };
   return (
     <Shell title={t("nav.settings")} sub={t(current.label)}>
       <div className="settings">
@@ -987,8 +1013,15 @@ export function Settings({ page }: { page: string }) {
           ))}
         </nav>
         <main className="settings-main">
+          <AdvancedContext.Provider value={advanced}>
           <div className="settings-inner">
-            <h2 className="page-title">{t(current.label)}</h2>
+            <div className="page-head">
+              <h2 className="page-title">{t(current.label)}</h2>
+              <label className="more-switch">
+                <span>{t("set.more")}</span>
+                <Toggle checked={advanced} label={t("set.more")} onChange={setAdvanced} />
+              </label>
+            </div>
             {configError ? (
               <Note warn>
                 {t("set.configBroken")} <span className="mono small">{configError}</span>
@@ -1006,6 +1039,7 @@ export function Settings({ page }: { page: string }) {
             {current.id === "language" ? <LanguagePage /> : null}
             {current.id === "backup" ? <BackupPage /> : null}
           </div>
+          </AdvancedContext.Provider>
         </main>
       </div>
     </Shell>

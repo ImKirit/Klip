@@ -7,7 +7,7 @@
 use crate::fonts::{Fonts, Role, Text};
 use crate::theme::Rgb;
 use windows::Win32::Graphics::Direct2D::Common::{
-    D2D1_COLOR_F, D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_CLOSED, D2D_RECT_F,
+    D2D1_COLOR_F, D2D_RECT_F,
 };
 use windows::Win32::Graphics::Direct2D::{
     ID2D1RenderTarget, ID2D1SolidColorBrush, ID2D1StrokeStyle, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
@@ -57,40 +57,29 @@ impl<'a> Gfx<'a> {
         self.fonts.text(text, role, weight, size, Some(max_w), 0.0)
     }
 
-    /// HUD lettering: capitals, spaced by `tracking` as a share of the font size.
-    pub fn caps(&self, text: &str, role: Role, weight: i32, size: f32, tracking: f32) -> Text {
-        self.fonts.text(&text.to_uppercase(), role, weight, size, None, size * tracking)
+    /// Lettering of headings and buttons. Once spaced capitals, now plain text a little
+    /// larger, so labels read at a glance. `tracking` is kept for the call sites.
+    pub fn caps(&self, text: &str, role: Role, weight: i32, size: f32, _tracking: f32) -> Text {
+        self.fonts.text(text, role, weight.max(600), size * 1.08, None, 0.0)
     }
 
-    pub fn caps_in(&self, text: &str, role: Role, weight: i32, size: f32, tracking: f32, max_w: f32) -> Text {
-        self.fonts.text(&text.to_uppercase(), role, weight, size, Some(max_w.max(1.0)), size * tracking)
+    pub fn caps_in(&self, text: &str, role: Role, weight: i32, size: f32, _tracking: f32, max_w: f32) -> Text {
+        self.fonts.text(text, role, weight.max(600), size * 1.08, Some(max_w.max(1.0)), 0.0)
     }
 
-    /// The mark of the design: a flat rectangle whose top right corner is cut off by
-    /// `cut` pixels. No radius anywhere.
+    /// A flat rectangle with rounded corners. `cut` is the size of the shape's corner as
+    /// the first designs drew it cut off; it now sets the radius, so every call keeps its
+    /// proportions.
     pub fn cut(&self, x: f32, y: f32, w: f32, h: f32, cut: f32, c: Rgb, a: f32) {
         if w <= 0.0 || h <= 0.0 {
             return;
         }
         let Some((rt, brush)) = &self.target else { return };
-        let cut = cut.min(w).min(h).max(0.0);
-        let at = |x: f32, y: f32| Vector2 { X: x, Y: y };
+        let radius = (cut * 0.75).min(w / 2.0).min(h / 2.0).max(0.0);
+        let rect = D2D_RECT_F { left: x, top: y, right: x + w, bottom: y + h };
         unsafe {
             brush.SetColor(&color(c, a));
-            let built = (|| {
-                let geometry = rt.GetFactory()?.CreatePathGeometry()?;
-                let sink = geometry.Open()?;
-                sink.BeginFigure(at(x, y), D2D1_FIGURE_BEGIN_FILLED);
-                sink.AddLines(&[at(x + w - cut, y), at(x + w, y + cut), at(x + w, y + h), at(x, y + h)]);
-                sink.EndFigure(D2D1_FIGURE_END_CLOSED);
-                sink.Close()?;
-                Ok::<_, windows::core::Error>(geometry)
-            })();
-            match built {
-                Ok(geometry) => rt.FillGeometry(&geometry, brush, None),
-                // Without the geometry the shape is still there, only uncut.
-                Err(_) => rt.FillRectangle(&D2D_RECT_F { left: x, top: y, right: x + w, bottom: y + h }, brush),
-            }
+            rt.FillRoundedRectangle(&D2D1_ROUNDED_RECT { rect, radiusX: radius, radiusY: radius }, brush);
         }
     }
 

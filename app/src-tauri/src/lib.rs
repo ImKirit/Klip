@@ -41,6 +41,29 @@ fn quit(app: AppHandle) {
     app.exit(0);
 }
 
+/// The clip after `--open`, if the app was started with one.
+fn open_arg() -> Option<String> {
+    let mut args = std::env::args().skip(1);
+    while let Some(a) = args.next() {
+        if a == "--open" {
+            return args.next().filter(|p| std::path::Path::new(p).is_file());
+        }
+    }
+    None
+}
+
+/// Percent encoding for a path inside the URL, as `encodeURIComponent` does it.
+fn encode(text: &str) -> String {
+    let mut out = String::new();
+    for b in text.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'!' | b'~' | b'*' | b'\'' | b'(' | b')' => out.push(b as char),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
+}
+
 pub fn run() {
     let backend = Arc::new(Backend::new());
     let on_exit = backend.clone();
@@ -52,7 +75,12 @@ pub fn run() {
         .setup(|app| {
             allow_media_dirs(app.handle());
             let selftest = std::env::var("KLIP_SELFTEST").ok();
-            let mut window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+            // `Klip.exe --open <clip>` comes from the overlay panel: start in the editor.
+            let page = match open_arg() {
+                Some(clip) => format!("index.html#/editor/{}", encode(&clip)),
+                None => "index.html".to_string(),
+            };
+            let mut window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App(page.into()))
                 .title("Klip.")
                 .inner_size(1440.0, 900.0)
                 .min_inner_size(1100.0, 680.0)

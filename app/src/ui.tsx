@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { FolderOpen, X } from "lucide-react";
+import { CircleHelp, FolderOpen, X } from "lucide-react";
 import { isTauri, pickFile, pickFolder } from "./lib/api";
 import { t } from "./lib/i18n";
 
@@ -268,12 +268,31 @@ export function ToastHost(props: { children: ReactNode }) {
 }
 
 /** A row of the settings pages: label and help on the left, control on the right. */
-export function Row(props: { label: string; help?: ReactNode; children: ReactNode; stacked?: boolean }) {
+/** True while the settings show their less common options too. */
+export const AdvancedContext = createContext(false);
+
+/**
+ * One setting. A text `help` explains it on hover, behind the small question mark, so
+ * the page stays calm. `info` is shown below the label, for what the row reports right
+ * now (a found camera, free space). `advanced` rows only show with "More options".
+ */
+export function Row(props: { label: string; help?: ReactNode; info?: ReactNode; children: ReactNode; stacked?: boolean; advanced?: boolean }) {
+  const advanced = useContext(AdvancedContext);
+  if (props.advanced && !advanced) return null;
+  const tip = typeof props.help === "string" ? props.help : null;
   return (
     <div className={`row${props.stacked ? " row-stacked" : ""}`}>
       <div className="row-text">
-        <div className="row-label">{props.label}</div>
-        {props.help ? <div className="row-help">{props.help}</div> : null}
+        <div className="row-label">
+          {props.label}
+          {tip ? (
+            <span className="row-tip" title={tip} aria-label={tip} tabIndex={0}>
+              <CircleHelp size={14} />
+            </span>
+          ) : null}
+        </div>
+        {props.help && !tip ? <div className="row-help">{props.help}</div> : null}
+        {props.info ? <div className="row-help">{props.info}</div> : null}
       </div>
       <div className="row-control">{props.children}</div>
     </div>
@@ -293,11 +312,13 @@ export function SectionHead(props: { title: string; note?: ReactNode; aside?: Re
 }
 
 /** A group of rows under a section head. No box around it. */
-export function Card(props: { title?: string; children: ReactNode; aside?: ReactNode }) {
+export function Card(props: { title?: string; children: ReactNode; aside?: ReactNode; advanced?: boolean }) {
+  const advanced = useContext(AdvancedContext);
+  if (props.advanced && !advanced) return null;
   return (
-    <section className={`group${props.title ? "" : " group-plain"}`}>
+    <section className="group">
       {props.title ? <SectionHead title={props.title} aside={props.aside} /> : null}
-      {props.children}
+      <div className="group-body">{props.children}</div>
     </section>
   );
 }

@@ -8,6 +8,7 @@ import { ToastHost } from "./ui";
 import { Library } from "./views/Library";
 import { Editor } from "./views/Editor";
 import { Settings } from "./views/Settings";
+import { Mark } from "./views/Shell";
 import { runSelfTest } from "./selftest";
 
 interface Boot {
@@ -49,9 +50,7 @@ export function App() {
   if (failure) {
     return (
       <div className="boot">
-        <div className="mark mark-big">
-          K<i />
-        </div>
+        <Mark size={72} />
         <p className="boot-error">{t("boot.failed", failure)}</p>
         {isTauri ? null : <p className="muted">{t("boot.needsBackend")}</p>}
       </div>

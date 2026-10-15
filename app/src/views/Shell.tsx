@@ -1,6 +1,7 @@
 // The frame around every view: the icon rail on the left and the HUD bar on top. The
 // state of the recorder and the storage live in the HUD bar, never in a box.
 
+import logo from "../assets/logo.svg";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { Camera, LayoutGrid, Scissors, Settings as SettingsIcon, Sparkles, Star, Video } from "lucide-react";
@@ -22,12 +23,9 @@ const RAIL: { view: Filters["view"]; short: Key; full: Key; icon: typeof Video }
   { view: "favorites", short: "rail.fav", full: "view.favorites", icon: Star },
 ];
 
-export function Mark() {
-  return (
-    <div className="mark" aria-label="Klip">
-      K<i />
-    </div>
-  );
+export function Mark(props: { size?: number }) {
+  const size = props.size ?? 38;
+  return <img className="mark" src={logo} width={size} height={size} alt="Klip" draggable={false} />;
 }
 
 function Rail() {

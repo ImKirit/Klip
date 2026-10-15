@@ -372,7 +372,7 @@ fn run() -> Res<()> {
         out: args.out.clone(),
         hotkey_problems: Mutex::new(Vec::new()),
         game: Mutex::new(None),
-        recent: Mutex::new(Vec::new()),
+        recent: Mutex::new(recent_from_disk(&args.out.clone().unwrap_or_else(|| args.cfg.clip_dir()))),
         source: Mutex::new(None),
         replay: args.replay.clone(),
     });
@@ -703,7 +703,7 @@ fn run() -> Res<()> {
                                 Action::OpenClip(i) => {
                                     let path = app.recent.lock().unwrap().get(i).map(|(_, p)| p.clone());
                                     if let Some(path) = path {
-                                        let _ = std::process::Command::new("explorer.exe").arg(path).spawn();
+                                        open_in_app(&app, &path);
                                     }
                                 }
                                 Action::OpenLibrary | Action::OpenSettings => open_library(&app),
@@ -944,6 +944,66 @@ fn remember(app: &App, path: PathBuf, seconds: u32) {
     recent.truncate(5);
 }
 
+/// The newest clips of the clip folder, so the panel shows them right after a start and
+/// not only those saved since. Camera files and exports are no clips of their own.
+fn recent_from_disk(dir: &Path) -> Vec<(ClipEntry, PathBuf)> {
+    fn walk(dir: &Path, depth: u32, found: &mut Vec<(std::time::SystemTime, PathBuf)>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            let Ok(meta) = entry.metadata() else { continue };
+            if meta.is_dir() {
+                if depth < 3 && !name.starts_with('.') && name != "exporte" {
+                    walk(&path, depth + 1, found);
+                }
+            } else if name.ends_with(".mp4") && !name.ends_with(".cam.mp4") {
+                if let Ok(modified) = meta.modified() {
+                    found.push((modified, path));
+                }
+            }
+        }
+    }
+    let mut found = Vec::new();
+    walk(dir, 0, &mut found);
+    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found
+        .into_iter()
+        .take(5)
+        .map(|(modified, path)| {
+            let seconds = read_json::<klip_core::ClipMeta>(&klip_core::ClipMeta::sidecar_path(&path))
+                .map(|m| (m.duration_ms / 1000) as u32)
+                .unwrap_or(0);
+            let time = {
+                // The time of day in local time, from the file's clock.
+                let ft = modified.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                local_hh_mm(ft)
+            };
+            let entry = ClipEntry {
+                title: path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
+                time,
+                duration_secs: seconds,
+            };
+            (entry, path)
+        })
+        .collect()
+}
+
+/// "HH:MM" of a Unix time in the local time zone of Windows.
+fn local_hh_mm(unix_secs: u64) -> String {
+    use windows::Win32::Foundation::{FILETIME, SYSTEMTIME};
+    use windows::Win32::System::Time::{FileTimeToSystemTime, SystemTimeToTzSpecificLocalTime};
+    let ticks = (unix_secs + 11_644_473_600) * 10_000_000;
+    let ft = FILETIME { dwLowDateTime: ticks as u32, dwHighDateTime: (ticks >> 32) as u32 };
+    let (mut utc, mut local) = (SYSTEMTIME::default(), SYSTEMTIME::default());
+    unsafe {
+        if FileTimeToSystemTime(&ft, &mut utc).is_err() || SystemTimeToTzSpecificLocalTime(None, &utc, &mut local).is_err() {
+            return String::new();
+        }
+    }
+    format!("{:02}:{:02}", local.wHour, local.wMinute)
+}
+
 /// "#RRGGBB" as a colour of the overlay.
 fn parse_accent(text: &str) -> Option<klip_overlay::Rgb> {
     let hex = text.trim().strip_prefix('#')?;
@@ -1077,6 +1137,23 @@ fn open_library(app: &App) {
         }
         _ => open_folder(&app.out_dir()),
     }
+}
+
+/// Opens a clip in the editor of the app. Without the app next to the recorder the clip
+/// opens in the player Windows has for it.
+fn open_in_app(app: &App, clip: &Path) {
+    let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("Klip.exe")));
+    match exe {
+        Some(exe) if exe.exists() => {
+            if let Err(e) = std::process::Command::new(&exe).arg("--open").arg(clip).spawn() {
+                eprintln!("klip-recorder: could not start the app: {e}");
+            }
+        }
+        _ => {
+            let _ = std::process::Command::new("explorer.exe").arg(clip).spawn();
+        }
+    }
+    let _ = app;
 }
 
 fn open_folder(dir: &Path) {

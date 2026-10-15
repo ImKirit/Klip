@@ -1,6 +1,6 @@
 //! DirectWrite fonts with a fallback chain.
 //!
-//! The design asks for Chakra Petch, Barlow and JetBrains Mono. They are
+//! The design asks for Archivo and JetBrains Mono. They are
 //! not Windows fonts, so each role is looked up in three places: the font files the
 //! caller hands over (a private collection, nothing is installed), then the fonts
 //! installed on the system, then Segoe UI or Consolas. Nothing is ever fetched from the
@@ -198,11 +198,13 @@ impl Fonts {
                 if let Some(c) = custom.as_ref().filter(|c| has_family(c, wanted)) {
                     return face(wanted, Some(c.clone()), "font file");
                 }
-                // Static cuts of a font with an optical size axis come out under a longer
-                // family name ("Bricolage Grotesque 96pt ..."). Accept that as the family,
-                // but only at a word boundary, so "Barlow" never takes "Barlow Condensed".
+                // Static cuts often come out under a longer family name: "Archivo SemiBold",
+                // "Bricolage Grotesque 96pt". Accept that as the family at a word boundary,
+                // but never a different width such as "Archivo Condensed".
                 let longer = |f: &&String| {
-                    f.strip_prefix(wanted).is_some_and(|rest| rest.starts_with(' ') && rest[1..].starts_with(|c: char| c.is_ascii_digit()))
+                    f.strip_prefix(wanted).is_some_and(|rest| {
+                        rest.starts_with(' ') && !["Condensed", "Expanded", "Narrow", "Black Condensed"].iter().any(|w| rest[1..].starts_with(w))
+                    })
                 };
                 if let (Some(c), Some(long)) = (custom.as_ref(), families.iter().find(longer)) {
                     return face(long, Some(c.clone()), "font file");
@@ -212,8 +214,8 @@ impl Fonts {
                 }
                 face(fallback, None, "fallback")
             };
-            let display = pick("Chakra Petch", "Segoe UI");
-            let ui = pick("Barlow", "Segoe UI");
+            let display = pick("Archivo", "Segoe UI");
+            let ui = pick("Archivo", "Segoe UI");
             let mono = pick("JetBrains Mono", "Consolas");
             report.display = display.label.clone();
             report.ui = ui.label.clone();

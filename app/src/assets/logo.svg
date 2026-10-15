@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Klip. mark: a K of round strokes, and the dot of the wordmark. -->
+  <rect width="512" height="512" rx="120" fill="#8B5CFF"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="66" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M158 142 V370"/>
+    <path d="M320 142 L180 266"/>
+    <path d="M226 228 L322 370"/>
+  </g>
+  <circle cx="392" cy="370" r="33" fill="#FFFFFF"/>
+</svg>
