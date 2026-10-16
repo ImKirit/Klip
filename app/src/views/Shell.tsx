@@ -2,9 +2,11 @@
 // state of the recorder and the storage live in the HUD bar, never in a box.
 
 import logo from "../assets/logo.svg";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
-import { Camera, LayoutGrid, Scissors, Settings as SettingsIcon, Sparkles, Star, Video } from "lucide-react";
+import { Camera, ChevronDown, Cloud, LayoutGrid, LogIn, LogOut, Scissors, Settings as SettingsIcon, Sparkles, Star, UserRound, Video } from "lucide-react";
+import { Avatar, useAccount } from "../account";
 import { call, errorText } from "../lib/api";
 import { formatBytes, formatDuration } from "../lib/format";
 import { t, tn } from "../lib/i18n";
@@ -12,7 +14,8 @@ import type { Key } from "../lib/i18n";
 import type { Filters } from "../lib/library";
 import { NO_FILTERS } from "../lib/library";
 import { useApp } from "../state";
-import { Segments } from "../ui";
+import { ContextMenu, Segments } from "../ui";
+import type { MenuItem } from "../ui";
 
 const RAIL: { view: Filters["view"]; short: Key; full: Key; icon: typeof Video }[] = [
   { view: "all", short: "rail.lib", full: "view.all", icon: LayoutGrid },
@@ -53,17 +56,6 @@ function Rail() {
           </button>
         );
       })}
-      <span className="rail-space" />
-      <button
-        type="button"
-        className={`rail-item${route.view === "settings" ? " is-on" : ""}`}
-        title={t("nav.settings")}
-        aria-current={route.view === "settings" ? "page" : undefined}
-        onClick={() => go({ view: "settings", page: "recording" })}
-      >
-        <SettingsIcon size={18} />
-        <span>{t("rail.set")}</span>
-      </button>
     </nav>
   );
 }
@@ -142,6 +134,47 @@ function Readouts() {
   );
 }
 
+/** Top right: the account. Signed in it shows the Discord name and picture, signed out a
+ *  sign in button. Either way it opens the menu that leads to the settings. */
+function AccountButton() {
+  const { account, linking, signIn, signOut } = useAccount();
+  const { go } = useApp();
+  const ref = useRef<HTMLButtonElement>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const open = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (r) setMenu({ x: r.right, y: r.bottom + 6 });
+  };
+  const items: MenuItem[] = [
+    ...(account ? [] : [{ label: t("cl.signIn"), icon: <LogIn size={15} />, disabled: linking !== null, onClick: () => void signIn() }]),
+    { label: t("nav.settings"), icon: <SettingsIcon size={15} />, separator: !account, onClick: () => go({ view: "settings", page: "recording" }) },
+    { label: t("acc.cloud"), icon: <Cloud size={15} />, onClick: () => go({ view: "settings", page: "cloud" }) },
+    ...(account ? [{ label: t("cl.signOut"), icon: <LogOut size={15} />, separator: true, danger: true, onClick: () => void signOut() }] : []),
+  ];
+  return (
+    <>
+      <button ref={ref} type="button" className={`account${menu ? " is-open" : ""}`} title={linking ? t("cl.waiting", linking) : account ? t("cl.signedIn", account.name) : t("acc.menu")} onMouseDown={(e) => e.stopPropagation()} onClick={() => (menu ? setMenu(null) : open())}>
+        {account ? (
+          <>
+            <Avatar account={account} size={30} />
+            <span className="account-name">{account.name}</span>
+          </>
+        ) : (
+          <>
+            <span className="account-icon">
+              <UserRound size={17} />
+            </span>
+            <span className="account-name">{linking ? t("acc.waiting", linking) : t("acc.signIn")}</span>
+          </>
+        )}
+        <ChevronDown size={14} className="account-chev" />
+      </button>
+      {/* Into the body: the frosted HUD bar would otherwise be the frame of the fixed menu. */}
+      {menu ? createPortal(<ContextMenu x={menu.x} y={menu.y} items={items} onClose={() => setMenu(null)} />, document.body) : null}
+    </>
+  );
+}
+
 export function Shell(props: { title: string; sub?: ReactNode; hud?: ReactNode; busy?: boolean; children: ReactNode }) {
   return (
     <div className="app">
@@ -151,6 +184,7 @@ export function Shell(props: { title: string; sub?: ReactNode; hud?: ReactNode; 
         {props.sub ? <span className="lbl hud-sub">{props.sub}</span> : null}
         <div className="hud-mid">{props.hud}</div>
         <Readouts />
+        <AccountButton />
       </header>
       {props.children}
     </div>

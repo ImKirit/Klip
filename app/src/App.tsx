@@ -4,7 +4,8 @@ import { cleanLang, setLang, t } from "./lib/i18n";
 import { applyTheme, DEFAULT_ACCENT, normalizeSettings } from "./lib/settings";
 import type { AppSettings, Config, Env } from "./lib/types";
 import { AppProvider, useApp } from "./state";
-import { ToastHost } from "./ui";
+import { AccountProvider, useAccount } from "./account";
+import { Button, Modal, ToastHost } from "./ui";
 import { Library } from "./views/Library";
 import { Editor } from "./views/Editor";
 import { Settings } from "./views/Settings";
@@ -18,6 +19,32 @@ interface Boot {
   settings: AppSettings;
 }
 
+/** Asked once after the first start: sign in with Discord, or go on without. */
+function Welcome() {
+  const { settings, saveSettings, env } = useApp();
+  const { signIn } = useAccount();
+  if (settings.welcomed || env.selftest) return null;
+  const answer = (login: boolean) => {
+    void saveSettings({ ...settings, welcomed: true });
+    if (login) void signIn();
+  };
+  return (
+    <Modal title={t("wel.title")} onClose={() => answer(false)} locked>
+      <div className="welcome">
+        <Mark size={64} />
+        <p>{t("wel.text")}</p>
+        <div className="welcome-actions">
+          <Button kind="primary" onClick={() => answer(true)}>
+            {t("cl.signIn")}
+          </Button>
+          <Button onClick={() => answer(false)}>{t("wel.skip")}</Button>
+        </div>
+        <p className="muted small">{t("wel.later")}</p>
+      </div>
+    </Modal>
+  );
+}
+
 function Views() {
   const { route, env, clips, scanning, lang } = useApp();
   // The self test of the real app: load every test clip once, write a report, quit.
@@ -26,9 +53,14 @@ function Views() {
   }, [env.selftest, scanning, clips]);
   // The language is part of every key: a switch draws the whole view again, memoised
   // parts included.
-  if (route.view === "editor") return <Editor key={`${lang}:${route.path}`} path={route.path} />;
-  if (route.view === "settings") return <Settings key={lang} page={route.page} />;
-  return <Library key={lang} />;
+  const view =
+    route.view === "editor" ? <Editor key={`${lang}:${route.path}`} path={route.path} /> : route.view === "settings" ? <Settings key={lang} page={route.page} /> : <Library key={lang} />;
+  return (
+    <>
+      {view}
+      <Welcome />
+    </>
+  );
 }
 
 export function App() {
@@ -60,7 +92,9 @@ export function App() {
   return (
     <ToastHost>
       <AppProvider {...boot}>
-        <Views />
+        <AccountProvider>
+          <Views />
+        </AccountProvider>
       </AppProvider>
     </ToastHost>
   );

@@ -8,6 +8,7 @@ export const DEFAULT_ACCENT = "#8B5CFF";
 
 export const DEFAULT_SETTINGS: AppSettings = {
   version: 1,
+  welcomed: false,
   theme: "dark",
   ffmpeg_path: "",
   storage_limit_gb: 0,
@@ -35,6 +36,7 @@ export function normalizeSettings(raw: unknown): AppSettings {
   const sorts = ["date_desc", "date_asc", "length_desc", "length_asc", "name", "size_desc"];
   return {
     version: 1,
+    welcomed: r.welcomed === true,
     theme: r.theme === "light" ? "light" : "dark",
     ffmpeg_path: typeof r.ffmpeg_path === "string" ? r.ffmpeg_path : "",
     storage_limit_gb: num(r.storage_limit_gb, 0, 0, 100_000),

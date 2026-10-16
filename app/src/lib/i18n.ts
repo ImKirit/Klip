@@ -377,6 +377,17 @@ const TABLE = {
     "Signing in with Discord already works. Uploading clips opens soon, the settings for it are ready below.",
     "Die Anmeldung mit Discord geht schon. Clips hochladen kommt bald, die Einstellungen dafür stehen unten bereit.",
   ],
+  "wel.title": ["Welcome to Klip", "Willkommen bei Klip"],
+  "wel.text": [
+    "Sign in with Discord and Klip knows you: your name and picture sit top right, and once Klip Cloud opens, your clips show up on your phone too. Without signing in everything else works the same.",
+    "Melde dich mit Discord an, dann kennt dich Klip: Name und Bild stehen oben rechts, und sobald Klip Cloud startet, siehst du deine Clips auch auf dem Handy. Ohne Anmeldung funktioniert alles andere genauso.",
+  ],
+  "wel.skip": ["Continue without signing in", "Ohne Anmeldung fortfahren"],
+  "wel.later": ["You can sign in later with the button at the top right.", "Anmelden kannst du dich später jederzeit über den Knopf oben rechts."],
+  "acc.signIn": ["Sign in", "Anmelden"],
+  "acc.waiting": ["Code {0}", "Code {0}"],
+  "acc.menu": ["Account and settings", "Konto und Einstellungen"],
+  "acc.cloud": ["Account & Cloud", "Konto & Cloud"],
   "cl.viaDiscord": ["Signed in with Discord", "Mit Discord angemeldet"],
   "cl.uploadSoon": ["Upload to Klip Cloud (coming soon)", "In die Klip Cloud laden (kommt bald)"],
   "cl.lead": [

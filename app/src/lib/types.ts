@@ -182,6 +182,8 @@ export interface AutoClipRules {
 /** `%APPDATA%\Klip\app.json`, settings only the app cares about. */
 export interface AppSettings {
   version: number;
+  /** The question after the first start (sign in or go on without) was answered. */
+  welcomed: boolean;
   theme: "dark" | "light";
   /** Empty means the default path. */
   ffmpeg_path: string;

@@ -2623,3 +2623,73 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   color: var(--ac-tx);
   font: 700 18px var(--f-d);
 }
+
+/* The account top right: picture and name, or a sign in button. Opens the menu with the
+   settings, which no longer sit in the rail. */
+.account {
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 40px;
+  margin: 0 14px 0 6px;
+  padding: 0 10px 0 5px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--p2);
+  color: var(--tx);
+  font: 600 14px var(--f-ui);
+  max-width: 220px;
+}
+
+.account:hover,
+.account.is-open {
+  background: var(--p3);
+}
+
+.account-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--ac);
+  color: var(--ac-tx);
+  flex: none;
+}
+
+.account-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-chev {
+  color: var(--mu);
+  flex: none;
+}
+
+.welcome {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 16px;
+  padding: 10px 6px 4px;
+}
+
+.welcome p {
+  max-width: 380px;
+  color: var(--mu);
+}
+
+.welcome-actions {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.welcome-actions .btn {
+  justify-content: center;
+}

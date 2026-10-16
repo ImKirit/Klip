@@ -18,6 +18,7 @@ import type { AutoClipRule, AutoClipRules, CloudMode, CloudSettings, Config, Cor
 import { useApp } from "../state";
 import { AdvancedContext, Button, Card, Choice, Modal, NumberField, PathField, Row, Select, Toggle, useToast } from "../ui";
 import { Shell } from "./Shell";
+import { Avatar, useAccount } from "../account";
 
 const PAGES: { id: string; label: Key; icon: typeof Video }[] = [
   { id: "recording", label: "set.recording", icon: Video },
@@ -434,58 +435,14 @@ function SoundsCard(props: { volume: number }) {
 const DEFAULT_CLOUD: CloudSettings = { mode: "off", server: "https://imkirit.dev/klip/cloud", keep_local: true, since: null };
 
 /** Klip Cloud: the account on a server, and which clips go there. */
-interface CloudAccount {
-  server: string;
-  name: string;
-  avatar: string | null;
-}
-
-/** The Discord picture, or the first letter when there is none or it does not load. */
-function Avatar(props: { account: CloudAccount }) {
-  const [broken, setBroken] = useState(false);
-  return props.account.avatar && !broken ? (
-    <img className="cloud-avatar" src={props.account.avatar} alt="" onError={() => setBroken(true)} />
-  ) : (
-    <span className="cloud-avatar cloud-avatar-letter">{props.account.name.slice(0, 1).toUpperCase() || "?"}</span>
-  );
-}
-
 function CloudPage() {
   const { config, set } = useConfig();
   const { recorder } = useApp();
-  const toast = useToast();
+  const { account, linking, signIn, signOut } = useAccount();
   const cloud = { ...DEFAULT_CLOUD, ...(config.cloud ?? {}) };
   const setCloud = (patch: Partial<CloudSettings>) => set({ cloud: { ...cloud, ...patch } });
-  const [account, setAccount] = useState<CloudAccount | null>(null);
-  const [linking, setLinking] = useState<{ code: string } | null>(null);
   const [server, setServer] = useState(cloud.server);
-  const load = () => call<{ account: CloudAccount | null }>("cloud_account").then((r) => setAccount(r.account), () => setAccount(null));
-  useEffect(() => {
-    void load();
-  }, []);
-  const signedIn = account !== null && account.server.replace(/\/+$/, "") === cloud.server.replace(/\/+$/, "");
-
-  const signIn = async () => {
-    try {
-      const link = await call<{ device_code: string; user_code: string; verify_url: string; interval: number; expires_in: number }>("cloud_link_start", { server: cloud.server });
-      setLinking({ code: link.user_code });
-      await call("open_url", { url: link.verify_url }).catch(() => window.open(link.verify_url, "_blank"));
-      const until = Date.now() + link.expires_in * 1000;
-      while (Date.now() < until) {
-        await new Promise((r) => setTimeout(r, Math.max(2, link.interval) * 1000));
-        const poll = await call<{ state: "pending" | "done"; name?: string }>("cloud_link_poll", { server: cloud.server, device_code: link.device_code });
-        if (poll.state === "done") {
-          toast(t("cl.signedIn", poll.name ?? ""));
-          break;
-        }
-      }
-    } catch (e) {
-      toast(errorText(e), "error");
-    } finally {
-      setLinking(null);
-      void load();
-    }
-  };
+  const signedIn = account !== null;
 
   return (
     <>
@@ -504,10 +461,10 @@ function CloudPage() {
               <strong>{account.name}</strong>
               <span className="muted small">{t("cl.viaDiscord")}</span>
             </div>
-            <Button small onClick={() => void call("cloud_sign_out").then(load)}>{t("cl.signOut")}</Button>
+            <Button small onClick={() => void signOut()}>{t("cl.signOut")}</Button>
           </div>
         ) : (
-          <Row label={t("cl.signedOut")} info={linking ? t("cl.waiting", linking.code) : undefined}>
+          <Row label={t("cl.signedOut")} info={linking ? t("cl.waiting", linking) : undefined}>
             <Button small kind="primary" disabled={linking !== null} onClick={() => void signIn()}>{t("cl.signIn")}</Button>
           </Row>
         )}
