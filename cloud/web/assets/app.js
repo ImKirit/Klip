@@ -89,7 +89,11 @@ function signIn(me, reason) {
 async function listPage() {
   const { clips } = await api("/api/clips");
   if (clips.length === 0) {
-    main.replaceChildren(el("section", { class: "hero" }, el("h1", {}, "No clips yet"), el("p", {}, "In Klip on your PC, open Settings, Cloud, and choose which clips go up.")));
+    const me = await api("/api/me");
+    const text = me.uploads === false
+      ? "You are signed in. Uploading clips from Klip opens soon, then they show up here."
+      : "In Klip on your PC, open Settings, Cloud, and choose which clips go up.";
+    main.replaceChildren(el("section", { class: "hero" }, el("h1", {}, "No clips yet"), el("p", {}, text)));
     return;
   }
   const out = [];

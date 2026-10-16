@@ -25,11 +25,12 @@ pub(crate) enum T {
     Settings,
     ClosesOverlay,
     ClipSaved,
+    Source,
 }
 
 impl T {
     #[cfg(test)]
-    pub const ALL: [T; 17] = [
+    pub const ALL: [T; 18] = [
         T::BufferActive,
         T::Recording,
         T::Paused,
@@ -47,6 +48,7 @@ impl T {
         T::Settings,
         T::ClosesOverlay,
         T::ClipSaved,
+        T::Source,
     ];
 }
 
@@ -70,6 +72,7 @@ fn row(t: T) -> (&'static str, &'static str) {
         T::Settings => ("Settings", "Einstellungen"),
         T::ClosesOverlay => ("closes the overlay", "schließt das Overlay"),
         T::ClipSaved => ("Clip saved", "Clip gespeichert"),
+        T::Source => ("Clipping", "Clippt gerade"),
     }
 }
 

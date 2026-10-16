@@ -201,6 +201,33 @@ fn panel(g: &Gfx, sc: &PanelScene, s: f32, hits: &mut Vec<Hit>) -> (f32, f32) {
     g.meter(pad, y, count, on, seg, seg_gap, lit, SURFACE_3);
     y += seg;
 
+    // Source chips: Desktop and every running game, the current one in the accent. They
+    // flow into a second row when they do not fit into one.
+    if !sc.sources.is_empty() {
+        y += px(14.0);
+        let heading = g.caps(t(T::Source), Role::Mono, 500, 10.0 * s, 0.12);
+        g.put(&heading, pad, y, TEXT_FAINT, 1.0);
+        y += heading.h + px(6.0);
+        let (ch, cpad, cgap) = (px(28.0), px(12.0), px(6.0));
+        let mut x = pad;
+        for (i, name) in sc.sources.iter().enumerate() {
+            let on = i == sc.source;
+            let label = g.text_in(name, Role::Ui, 600, 13.0 * s, inner - cpad * 2.0);
+            let cw = (label.w + cpad * 2.0).min(inner);
+            if x > pad && x + cw > pad + inner {
+                x = pad;
+                y += ch + cgap;
+            }
+            let action = Action::PickSource(i);
+            let fill = if on { sc.accent } else if hot(action) { SURFACE_3 } else { SURFACE_2 };
+            g.cut(x, y, cw, ch, ch, fill, 1.0);
+            g.put_centered(&label, x, y, cw, ch, if on { ON_ACCENT } else { TEXT }, 1.0);
+            hit(action, x, y, cw, ch);
+            x += cw + cgap;
+        }
+        y += ch;
+    }
+
     // Buttons: one look, the first one filled with the accent.
     let bh = px(46.0);
     let button = |g: &Gfx, action: Action, y: f32, text: &str, hint: &str, mark: Option<Rgb>, primary: bool| {
@@ -553,6 +580,22 @@ mod tests {
                 let apart = a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
                 assert!(apart, "{:?} overlaps {:?}", a.action, b.action);
             }
+        }
+    }
+
+    #[test]
+    fn source_chips_wrap_and_stay_inside() {
+        let mut state = OverlayState::default();
+        state.panel.placement.visible = true;
+        state.panel.sources = ["Desktop", "Valorant", "Minecraft", "Counter-Strike 2", "Rocket League"].map(String::from).to_vec();
+        state.panel.source = 1;
+        let mut hits = Vec::new();
+        let (w, h) = size_of(&state, Element::Panel, &mut hits);
+        let chips: Vec<&Hit> = hits.iter().filter(|h| matches!(h.action, Action::PickSource(_))).collect();
+        assert_eq!(chips.len(), 5);
+        assert!(chips.iter().any(|c| c.y > chips[0].y), "five chips need a second row");
+        for c in &chips {
+            assert!(c.x >= 0.0 && c.x + c.w <= w - 20.0 + 1.0 && c.y + c.h <= h, "{c:?}");
         }
     }
 

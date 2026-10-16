@@ -62,6 +62,8 @@ fn base_state(monitor: MonitorTarget) -> OverlayState {
     state.input.layout.mouse.movement = true;
     state.input.layout.widgets.kps = true;
     state.panel.clips = clips();
+    state.panel.sources = ["Desktop", "Valorant", "Minecraft"].map(String::from).to_vec();
+    state.panel.source = 1;
     state.panel.hints = PanelHints {
         save_clip: "Alt+S".into(),
         record: "Ctrl+Shift+F9".into(),

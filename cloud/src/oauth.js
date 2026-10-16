@@ -47,7 +47,10 @@ export async function discordUser(cfg, code) {
   const meRes = await fetch(DISCORD_ME, { headers: { Authorization: `Bearer ${access_token}` } });
   if (!meRes.ok) throw new Error(`Discord did not name the account (${meRes.status})`);
   const me = await meRes.json();
-  const avatar = me.avatar ? `https://cdn.discordapp.com/avatars/${me.id}/${me.avatar}.png?size=96` : null;
+  // Without an own picture Discord shows one of its six default ones, so does Klip.
+  const avatar = me.avatar
+    ? `https://cdn.discordapp.com/avatars/${me.id}/${me.avatar}.png?size=128`
+    : `https://cdn.discordapp.com/embed/avatars/${Number((BigInt(me.id) >> 22n) % 6n)}.png`;
   return { id: String(me.id), name: me.global_name || me.username, avatar };
 }
 

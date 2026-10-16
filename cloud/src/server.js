@@ -227,6 +227,7 @@ export function createServer(cfg = loadConfig()) {
       return json(res, 200, {
         user: publicUser(u),
         google: googleEnabled(cfg),
+        uploads: cfg.uploads,
         used: usedOnServer(db, u.id),
         quota: cfg.quotaBytes,
         clips: db.prepare("SELECT COUNT(*) AS n FROM clips WHERE user_id = ?").get(u.id).n,
@@ -255,6 +256,7 @@ export function createServer(cfg = loadConfig()) {
     }
     if (m === "PUT" && p === "/api/clips") {
       const { user } = need(req);
+      if (!cfg.uploads) throw new HttpError(403, "uploads open soon, the cloud is not ready yet");
       const length = Number(req.headers["content-length"] || 0);
       if (!length) throw new HttpError(411, "the size of the clip is missing");
       if (length > cfg.maxUploadBytes) throw new HttpError(413, "the clip is larger than this server takes");

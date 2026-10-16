@@ -341,14 +341,32 @@ function MonitorSelect(props: { value: MonitorChoice; onChange: (value: MonitorC
     const size = known[i] ? (i === 0 ? t("rec.monMain", known[i]) : known[i]) : null;
     return { value: `i${i}`, label: size ? t("rec.monIndex", i + 1, size) : t("rec.monIndexPlain", i + 1) };
   });
-  const value = props.value.type === "index" ? `i${props.value.index}` : props.value.type;
+  // The common choices as buttons, so "all monitors" is one click and not hidden in a list.
+  // A single other monitor and "the monitor of the game" stay in the list next to them.
+  const both = known.length === 2;
+  const mode = props.value.type === "all" ? "all" : props.value.type === "primary" ? "primary" : "other";
+  const other = props.value.type === "index" ? `i${props.value.index}` : "game";
   return (
-    <Select
-      label={t("rec.monitor")}
-      value={value}
-      onChange={(v) => props.onChange(v === "primary" || v === "game" || v === "all" ? { type: v } : { type: "index", index: Number(v.slice(1)) })}
-      options={[{ value: "primary", label: t("rec.monPrimary") }, { value: "game", label: t("rec.monGame") }, { value: "all", label: t("rec.monAll") }, ...single]}
-    />
+    <span className="monitor-pick">
+      <Choice<"primary" | "all" | "other">
+        label={t("rec.monitor")}
+        value={mode}
+        onChange={(v) => props.onChange(v === "other" ? { type: "game" } : { type: v })}
+        options={[
+          { value: "primary", label: t("rec.monPrimary") },
+          { value: "all", label: both ? t("rec.monBoth") : t("rec.monAllShort") },
+          { value: "other", label: t("rec.monOther") },
+        ]}
+      />
+      {mode === "other" ? (
+        <Select
+          label={t("rec.monitor")}
+          value={other}
+          onChange={(v) => props.onChange(v === "game" ? { type: "game" } : { type: "index", index: Number(v.slice(1)) })}
+          options={[{ value: "game", label: t("rec.monGame") }, ...single]}
+        />
+      ) : null}
+    </span>
   );
 }
 
@@ -416,16 +434,32 @@ function SoundsCard(props: { volume: number }) {
 const DEFAULT_CLOUD: CloudSettings = { mode: "off", server: "https://imkirit.dev/klip/cloud", keep_local: true, since: null };
 
 /** Klip Cloud: the account on a server, and which clips go there. */
+interface CloudAccount {
+  server: string;
+  name: string;
+  avatar: string | null;
+}
+
+/** The Discord picture, or the first letter when there is none or it does not load. */
+function Avatar(props: { account: CloudAccount }) {
+  const [broken, setBroken] = useState(false);
+  return props.account.avatar && !broken ? (
+    <img className="cloud-avatar" src={props.account.avatar} alt="" onError={() => setBroken(true)} />
+  ) : (
+    <span className="cloud-avatar cloud-avatar-letter">{props.account.name.slice(0, 1).toUpperCase() || "?"}</span>
+  );
+}
+
 function CloudPage() {
   const { config, set } = useConfig();
   const { recorder } = useApp();
   const toast = useToast();
   const cloud = { ...DEFAULT_CLOUD, ...(config.cloud ?? {}) };
   const setCloud = (patch: Partial<CloudSettings>) => set({ cloud: { ...cloud, ...patch } });
-  const [account, setAccount] = useState<{ server: string; name: string } | null>(null);
+  const [account, setAccount] = useState<CloudAccount | null>(null);
   const [linking, setLinking] = useState<{ code: string } | null>(null);
   const [server, setServer] = useState(cloud.server);
-  const load = () => call<{ account: { server: string; name: string } | null }>("cloud_account").then((r) => setAccount(r.account), () => setAccount(null));
+  const load = () => call<{ account: CloudAccount | null }>("cloud_account").then((r) => setAccount(r.account), () => setAccount(null));
   useEffect(() => {
     void load();
   }, []);
@@ -462,19 +496,26 @@ function CloudPage() {
           <div>{t("cl.soonNote")}</div>
         </div>
       )}
-      <fieldset className={`cloud-fields${CLOUD_READY ? "" : " is-soon"}`} disabled={!CLOUD_READY} aria-disabled={!CLOUD_READY}>
       <Card title={t("cl.account")}>
-        <Row label={t("cl.server")} help={t("cl.serverHelp")}>
+        {signedIn && account ? (
+          <div className="cloud-me">
+            <Avatar account={account} />
+            <div className="cloud-me-text">
+              <strong>{account.name}</strong>
+              <span className="muted small">{t("cl.viaDiscord")}</span>
+            </div>
+            <Button small onClick={() => void call("cloud_sign_out").then(load)}>{t("cl.signOut")}</Button>
+          </div>
+        ) : (
+          <Row label={t("cl.signedOut")} info={linking ? t("cl.waiting", linking.code) : undefined}>
+            <Button small kind="primary" disabled={linking !== null} onClick={() => void signIn()}>{t("cl.signIn")}</Button>
+          </Row>
+        )}
+        <Row advanced label={t("cl.server")} help={t("cl.serverHelp")}>
           <input className="input" style={{ width: 300 }} value={server} onChange={(e) => setServer(e.target.value)} onBlur={() => server.trim() && server.trim() !== cloud.server && setCloud({ server: server.trim().replace(/\/+$/, "") })} />
         </Row>
-        <Row label={signedIn ? t("cl.signedIn", account?.name ?? "") : t("cl.signedOut")} info={linking ? t("cl.waiting", linking.code) : undefined}>
-          {signedIn ? (
-            <Button small onClick={() => void call("cloud_sign_out").then(load)}>{t("cl.signOut")}</Button>
-          ) : (
-            <Button small kind="primary" disabled={linking !== null} onClick={() => void signIn()}>{t("cl.signIn")}</Button>
-          )}
-        </Row>
       </Card>
+      <fieldset className={`cloud-fields${CLOUD_READY ? "" : " is-soon"}`} disabled={!CLOUD_READY} aria-disabled={!CLOUD_READY}>
       <Card title={t("cl.what")}>
         <Row label={t("cl.mode")} help={t("cl.modeHelp")}>
           <Choice<CloudMode>

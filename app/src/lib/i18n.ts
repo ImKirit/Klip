@@ -367,9 +367,10 @@ const TABLE = {
   "set.cloud": ["Cloud", "Cloud"],
   "cl.soon": ["Soon", "Bald"],
   "cl.soonNote": [
-    "Klip Cloud is coming soon. Everything below is ready and switches on once the server is online.",
-    "Klip Cloud kommt bald. Alles hier ist vorbereitet und wird freigeschaltet, sobald der Server online ist.",
+    "Signing in with Discord already works. Uploading clips opens soon, the settings for it are ready below.",
+    "Die Anmeldung mit Discord geht schon. Clips hochladen kommt bald, die Einstellungen dafür stehen unten bereit.",
   ],
+  "cl.viaDiscord": ["Signed in with Discord", "Mit Discord angemeldet"],
   "cl.uploadSoon": ["Upload to Klip Cloud (coming soon)", "In die Klip Cloud laden (kommt bald)"],
   "cl.lead": [
     "Klip Cloud keeps clips on a server of your choice, which stores them on its own disk or in your Google Drive. Sign in with Discord here and on klip in the browser of your phone, and you see the same clips on both.",
@@ -433,6 +434,9 @@ const TABLE = {
   ],
   "rec.monPrimary": ["Main monitor", "Hauptmonitor"],
   "rec.monAll": ["All monitors side by side", "Alle Monitore nebeneinander"],
+  "rec.monBoth": ["Both monitors", "Beide Monitore"],
+  "rec.monAllShort": ["All monitors", "Alle Monitore"],
+  "rec.monOther": ["Other", "Anderer"],
   "set.more": ["More options", "Mehr Optionen"],
   "cam.title": ["Webcam", "Webcam"],
   "cam.enabled": ["Record the webcam", "Webcam aufnehmen"],

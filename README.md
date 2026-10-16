@@ -70,10 +70,13 @@ There is no release download yet, you build Klip yourself. That takes a few minu
 - **Manual recording** with pause and markers. Written as fragmented MP4, so a crash leaves a
   playable file. Stops by itself below 2 GB of free disk space.
 - **Screenshots** as PNG.
-- **Sources.** The main monitor by default, or a chosen monitor, the monitor of the game,
-  or all monitors side by side in one picture. A region of the picture is possible too.
+- **Sources.** The main monitor by default, both monitors side by side in one picture with
+  one click, or a chosen monitor, or the monitor of the game. A region of the picture is possible too.
 - **Clip anywhere.** The buffer runs on the desktop as well. "Only while a game is
   recognised" is one switch away.
+- **Pick the source in the overlay.** The panel shows what Klip clips for right now, the
+  desktop or a game, and switches to any other running game with one click. Clips land in
+  that game's folder.
 - **Webcam.** Recorded as a file of its own next to each clip. In the editor you choose the
   corner and the size, or leave it out, and the export lays it over the picture.
 
@@ -193,11 +196,11 @@ and a running recording. The effect on the frame rate of a game has not been mea
 
 ## Klip Cloud (coming soon)
 
-The server is built, the public one is not online yet, so the Cloud page in the app is
-locked for now. Once it is: optional, turn it on under **Settings, Cloud**, sign in with Discord and Klip uploads your
-clips to a server you run yourself. Open that server on your phone, sign in with the same
-Discord account and you see every clip there, playable and downloadable. There is no phone
-app, the page works in any mobile browser.
+Signing in works already: under **Settings, Cloud** you sign in with Discord and Klip shows
+your name and picture. Uploading opens soon. Then Klip puts your clips on the Klip Cloud
+server, and on your phone you open the same address, sign in with the same Discord account
+and see every clip, playable and downloadable. There is no phone app, the page works in any
+mobile browser.
 
 - **What goes up:** nothing, only clips you pick (right click, "Upload to Klip Cloud"), or
   every new clip automatically.

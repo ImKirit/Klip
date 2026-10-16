@@ -210,6 +210,11 @@ pub struct PanelElement {
     /// Newest first. The panel shows at most five.
     pub clips: Vec<ClipEntry>,
     pub hints: PanelHints,
+    /// What a clip can come from right now: "Desktop" and every game that runs. The
+    /// panel shows them as chips, a click reports [`Action::PickSource`]. At most six.
+    pub sources: Vec<String>,
+    /// Index into `sources` of the one that is clipped now.
+    pub source: usize,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -255,7 +260,14 @@ impl Default for OverlayState {
                 kps: None,
                 cps: None,
             },
-            panel: PanelElement { placement: panel, position: None, clips: Vec::new(), hints: PanelHints::default() },
+            panel: PanelElement {
+                placement: panel,
+                position: None,
+                clips: Vec::new(),
+                hints: PanelHints::default(),
+                sources: Vec::new(),
+                source: 0,
+            },
         }
     }
 }
@@ -269,6 +281,8 @@ pub enum Action {
     ToggleMic,
     /// Index into `PanelElement::clips`.
     OpenClip(usize),
+    /// Index into `PanelElement::sources`.
+    PickSource(usize),
     OpenLibrary,
     OpenSettings,
     /// The close button. The overlay has already closed the panel when this arrives.

@@ -31,6 +31,8 @@ export function loadConfig(env = process.env) {
     // Space per account on this server, in bytes. 0 means no limit.
     quotaBytes: int("KLIP_QUOTA_GB", 20, 0) * 1024 ** 3,
     maxUploadBytes: int("KLIP_MAX_UPLOAD_MB", 2048) * 1024 ** 2,
+    // "0" keeps sign in working but refuses clips, while the cloud is announced as coming soon.
+    uploads: env.KLIP_UPLOADS !== "0",
     // Only these Discord accounts may sign in. Empty means everyone with a Discord account.
     allowedUsers: (env.KLIP_ALLOWED_DISCORD_IDS || "").split(",").map((s) => s.trim()).filter(Boolean),
   };

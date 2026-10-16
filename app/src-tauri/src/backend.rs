@@ -343,7 +343,7 @@ impl Backend {
             "sound_reset" => sound_reset(a),
             "recorder_status" => recorder_status(),
             "recorder_start" => recorder_start(),
-            "cloud_account" => Ok(json!({ "account": klip_cloud::account() })),
+            "cloud_account" => Ok(json!({ "account": klip_cloud::account_fresh() })),
             "cloud_link_start" => {
                 let label = format!("Klip on {}", std::env::var("COMPUTERNAME").unwrap_or_else(|_| "a PC".into()));
                 klip_cloud::start_link(str_arg(a, "server")?, &label).map(|l| json!(l))

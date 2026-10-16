@@ -2577,3 +2577,49 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   opacity: 0.45;
   cursor: default;
 }
+
+.monitor-pick {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.cloud-me {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+}
+
+.cloud-me-text {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cloud-me-text strong {
+  font: 700 16px var(--f-d);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cloud-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex: none;
+  object-fit: cover;
+  box-shadow: 0 0 0 2px var(--line);
+}
+
+.cloud-avatar-letter {
+  display: grid;
+  place-items: center;
+  background: var(--ac);
+  color: var(--ac-tx);
+  font: 700 18px var(--f-d);
+}

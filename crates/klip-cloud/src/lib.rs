@@ -48,6 +48,9 @@ fn explain(error: ureq::Error) -> String {
 struct Stored {
     server: String,
     name: String,
+    /// Address of the Discord profile picture.
+    #[serde(default)]
+    avatar: Option<String>,
     /// The token, encrypted by Windows for this user, in base64.
     token: String,
 }
@@ -79,11 +82,37 @@ fn protect(data: &[u8], encrypt: bool) -> Res<Vec<u8>> {
 pub struct Account {
     pub server: String,
     pub name: String,
+    pub avatar: Option<String>,
+}
+
+fn stored() -> Option<Stored> {
+    serde_json::from_slice(&std::fs::read(token_file()).ok()?).ok()
 }
 
 pub fn account() -> Option<Account> {
-    let stored: Stored = serde_json::from_slice(&std::fs::read(token_file()).ok()?).ok()?;
-    Some(Account { server: stored.server, name: stored.name })
+    let s = stored()?;
+    Some(Account { server: s.server, name: s.name, avatar: s.avatar })
+}
+
+/// Asks the server for the current name and picture, a changed Discord profile shows up
+/// in Klip this way. Falls back to what is stored when the server cannot be reached.
+pub fn account_fresh() -> Option<Account> {
+    let mut s = stored()?;
+    if let Ok(token) = token_for(&s.server) {
+        let res = agent().get(&url(&s.server, "/api/me")).set("Authorization", &format!("Bearer {token}")).call();
+        if let Ok(body) = res.map_err(explain).and_then(|r| r.into_json::<serde_json::Value>().map_err(|e| e.to_string())) {
+            if let Some(user) = body.get("user").filter(|u| u.is_object()) {
+                let name = user.get("name").and_then(|n| n.as_str()).unwrap_or(&s.name).to_string();
+                let avatar = user.get("avatar").and_then(|a| a.as_str()).map(str::to_string);
+                if name != s.name || avatar != s.avatar {
+                    s.name = name;
+                    s.avatar = avatar;
+                    let _ = std::fs::write(token_file(), serde_json::to_vec_pretty(&s).unwrap_or_default());
+                }
+            }
+        }
+    }
+    Some(Account { server: s.server, name: s.name, avatar: s.avatar })
 }
 
 /// The token for `server`, if this PC is linked to it.
@@ -97,9 +126,9 @@ fn token_for(server: &str) -> Res<String> {
     String::from_utf8(protect(&sealed, false)?).map_err(|e| e.to_string())
 }
 
-fn save_token(server: &str, name: &str, token: &str) -> Res<()> {
+fn save_token(server: &str, name: &str, avatar: Option<String>, token: &str) -> Res<()> {
     let sealed = protect(token.as_bytes(), true)?;
-    let stored = Stored { server: server.to_string(), name: name.to_string(), token: base64::engine::general_purpose::STANDARD.encode(sealed) };
+    let stored = Stored { server: server.to_string(), name: name.to_string(), avatar, token: base64::engine::general_purpose::STANDARD.encode(sealed) };
     std::fs::create_dir_all(data_dir()).map_err(|e| e.to_string())?;
     std::fs::write(token_file(), serde_json::to_vec_pretty(&stored).unwrap_or_default()).map_err(|e| e.to_string())
 }
@@ -139,7 +168,7 @@ pub fn start_link(server: &str, label: &str) -> Res<Link> {
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum Poll {
     Pending,
-    Done { name: String },
+    Done { name: String, avatar: Option<String> },
 }
 
 pub fn poll_link(server: &str, device_code: &str) -> Res<Poll> {
@@ -150,8 +179,9 @@ pub fn poll_link(server: &str, device_code: &str) -> Res<Poll> {
     let body: serde_json::Value = res.into_json().map_err(|e| e.to_string())?;
     let token = body.get("token").and_then(|t| t.as_str()).ok_or("the server sent no token")?;
     let name = body.pointer("/user/name").and_then(|n| n.as_str()).unwrap_or("").to_string();
-    save_token(server, &name, token)?;
-    Ok(Poll::Done { name })
+    let avatar = body.pointer("/user/avatar").and_then(|a| a.as_str()).map(str::to_string);
+    save_token(server, &name, avatar.clone(), token)?;
+    Ok(Poll::Done { name, avatar })
 }
 
 // ---- uploading -------------------------------------------------------------------

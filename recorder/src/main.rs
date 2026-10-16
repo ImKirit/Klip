@@ -46,7 +46,7 @@ use windows::Win32::System::Threading::{GetCurrentProcess, GetCurrentThreadId, G
 use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
 use windows::Win32::UI::Input::KeyboardAndMouse::UnregisterHotKey;
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetMessageW, GetWindowTextW, IsWindowVisible, PostThreadMessageW, MSG, WM_APP, WM_HOTKEY, WM_QUIT,
+    EnumWindows, GetMessageW, GetWindowTextW, IsWindow, IsWindowVisible, PostThreadMessageW, MSG, WM_APP, WM_HOTKEY, WM_QUIT,
 };
 
 pub type Res<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -214,6 +214,15 @@ enum Event {
     Tick,
 }
 
+/// A program a clip can be credited to: a recognised game, or an unknown fullscreen
+/// program the user may pick in the panel. `hwnd` is set for the unknown ones, they send
+/// no "stopped" event and are dropped once their window is gone.
+#[derive(Clone)]
+struct Running {
+    info: GameInfo,
+    hwnd: Option<isize>,
+}
+
 /// State shared between the main loop and the pipe server.
 struct App {
     pipeline: Mutex<Option<Arc<Pipeline>>>,
@@ -228,6 +237,11 @@ struct App {
     cloud_uploaded: AtomicU32,
     /// The game that is running right now.
     game: Mutex<Option<GameInfo>>,
+    /// Games and unknown fullscreen programs running now, for the source chips of the panel.
+    running: Mutex<Vec<Running>>,
+    /// The source picked in the panel. `None` follows the game in the foreground,
+    /// `Some(None)` is the desktop, `Some(Some(g))` that program until it closes.
+    picked: Mutex<Option<Option<GameInfo>>>,
     /// The clips saved last, newest first, for the overlay panel.
     recent: Mutex<Vec<(ClipEntry, PathBuf)>>,
     /// Called by the recording chain after it saved a clip on its own.
@@ -246,6 +260,75 @@ impl App {
             MonitorChoice::Index { index } if gfx::monitors().is_ok_and(|m| index < m.len()) => SourcePick::Monitor(index),
             MonitorChoice::All => SourcePick::All,
             _ => SourcePick::Primary,
+        }
+    }
+
+    fn note_running(&self, info: GameInfo, hwnd: Option<isize>) {
+        let mut running = self.running.lock().unwrap();
+        match running.iter_mut().find(|r| r.info.exe_name.eq_ignore_ascii_case(&info.exe_name)) {
+            // A known game replaces the guess made from its fullscreen window.
+            Some(r) if r.hwnd.is_some() && hwnd.is_none() => *r = Running { info, hwnd },
+            Some(_) => {}
+            None => running.push(Running { info, hwnd }),
+        }
+    }
+
+    fn forget_running(&self, exe: &str) {
+        self.running.lock().unwrap().retain(|r| !r.info.exe_name.eq_ignore_ascii_case(exe));
+        let mut picked = self.picked.lock().unwrap();
+        if matches!(&*picked, Some(Some(g)) if g.exe_name.eq_ignore_ascii_case(exe)) {
+            *picked = None;
+        }
+    }
+
+    /// Drops unknown programs whose window closed.
+    fn prune_running(&self) {
+        let gone: Vec<String> = self
+            .running
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|r| r.hwnd.is_some_and(|h| !unsafe { IsWindow(Some(HWND(h as *mut _))) }.as_bool()))
+            .map(|r| r.info.exe_name.clone())
+            .collect();
+        for exe in &gone {
+            self.forget_running(exe);
+        }
+    }
+
+    /// The program the next clip is credited to.
+    fn credited(&self) -> Option<GameInfo> {
+        match &*self.picked.lock().unwrap() {
+            Some(choice) => choice.clone(),
+            None => self.game.lock().unwrap().clone(),
+        }
+    }
+
+    /// Names for the panel chips, "Desktop" first, and the index of the current one.
+    fn sources(&self) -> (Vec<String>, usize) {
+        let credited = self.credited();
+        let running = self.running.lock().unwrap();
+        let mut names = vec!["Desktop".to_string()];
+        names.extend(running.iter().take(5).map(|r| r.info.name.clone()));
+        let current = credited.and_then(|g| running.iter().take(5).position(|r| r.info.exe_name.eq_ignore_ascii_case(&g.exe_name)));
+        (names, current.map_or(0, |i| i + 1))
+    }
+
+    /// A chip of the panel was clicked. Index 0 is the desktop.
+    fn pick_source(&self, index: usize) {
+        let choice = match index {
+            0 => None,
+            i => match self.running.lock().unwrap().get(i - 1) {
+                Some(r) => Some(r.info.clone()),
+                None => return,
+            },
+        };
+        println!("source: {} picked in the panel", choice.as_ref().map_or("Desktop", |g| g.name.as_str()));
+        *self.picked.lock().unwrap() = Some(choice.clone());
+        if let Some(p) = self.current() {
+            // The input track only follows a game that really has the focus, a pick never
+            // switches it on.
+            p.set_game(choice, false);
         }
     }
 
@@ -379,6 +462,8 @@ fn run() -> Res<()> {
         cloud_error: Mutex::new(None),
         cloud_uploaded: AtomicU32::new(0),
         game: Mutex::new(None),
+        running: Mutex::new(Vec::new()),
+        picked: Mutex::new(None),
         recent: Mutex::new(recent_from_disk(&args.out.clone().unwrap_or_else(|| args.cfg.clip_dir()))),
         source: Mutex::new(None),
         replay: args.replay.clone(),
@@ -720,6 +805,7 @@ fn run() -> Res<()> {
                                     }
                                 }
                                 Action::OpenLibrary | Action::OpenSettings => open_library(&app),
+                                Action::PickSource(i) => app.pick_source(i),
                                 Action::ClosePanel => {}
                                 Action::PanelMoved { x, y } => {
                                     // Remember where the user put the panel.
@@ -825,9 +911,16 @@ fn on_game_event(app: &App, event: GameEvent) {
                 if g.protection.is_protected() { ", protected by anti-cheat" } else { "" }
             );
             *app.game.lock().unwrap() = Some(info(&g));
+            app.note_running(info(&g), None);
+            // A new game ends a "Desktop" pick, the user is playing again.
+            let mut picked = app.picked.lock().unwrap();
+            if matches!(*picked, Some(None)) {
+                *picked = None;
+            }
         }
         GameEvent::Foreground(g) => {
             *app.game.lock().unwrap() = Some(info(&g));
+            app.note_running(info(&g), None);
             if app.current().is_none() {
                 // By default the main monitor. With the choice "monitor of the game" the
                 // handle of the foreground window is used, only to ask Windows which
@@ -843,19 +936,23 @@ fn on_game_event(app: &App, event: GameEvent) {
                 app.start_pipeline(source);
             }
             if let Some(p) = app.current() {
-                p.set_game(Some(info(&g)), true);
+                match picked_other(app, &g.exe_name) {
+                    Some(choice) => p.set_game(choice, false),
+                    None => p.set_game(Some(info(&g)), true),
+                }
             }
         }
         GameEvent::Background(g) => {
             if let Some(p) = app.current() {
-                p.set_game(Some(info(&g)), false);
+                p.set_game(picked_other(app, &g.exe_name).unwrap_or_else(|| Some(info(&g))), false);
             }
         }
         GameEvent::Stopped(g) => {
             println!("game: {} stopped", g.name);
             *app.game.lock().unwrap() = None;
+            app.forget_running(&g.exe_name);
             if let Some(p) = app.current() {
-                p.set_game(None, false);
+                p.set_game(app.credited(), false);
             }
             if app.cfg.lock().unwrap().buffer_mode == BufferMode::GameOnly {
                 app.stop_pipeline();
@@ -863,8 +960,44 @@ fn on_game_event(app: &App, event: GameEvent) {
         }
         GameEvent::UnknownFullscreen(f) => {
             println!("game: unknown fullscreen program {}, add it in the app if it is a game", f.exe_name.as_deref().unwrap_or("?"));
+            // Offered in the panel, never credited on its own.
+            if let Some(exe) = f.exe_name.clone() {
+                let name = window_name(f.hwnd).unwrap_or_else(|| exe_label(&exe));
+                app.note_running(GameInfo { id: format!("exe:{}", exe.to_lowercase()), name, exe_name: exe }, Some(f.hwnd));
+            }
         }
     }
+}
+
+/// The source picked in the panel, when it is something else than this game.
+fn picked_other(app: &App, exe: &str) -> Option<Option<GameInfo>> {
+    match &*app.picked.lock().unwrap() {
+        Some(Some(g)) if g.exe_name.eq_ignore_ascii_case(exe) => None,
+        Some(choice) => Some(choice.clone()),
+        None => None,
+    }
+}
+
+/// A short name from a window title: "Minecraft* 26.2 - Multiplayer" becomes "Minecraft".
+fn window_name(hwnd: isize) -> Option<String> {
+    let mut buf = [0u16; 256];
+    let len = unsafe { GetWindowTextW(HWND(hwnd as *mut _), &mut buf) }.max(0) as usize;
+    short_title(&String::from_utf16_lossy(&buf[..len.min(buf.len())]))
+}
+
+fn short_title(title: &str) -> Option<String> {
+    let head = title.split(" - ").next().unwrap_or(title);
+    let head = head.trim_end_matches(|c: char| c == '*' || c == '.' || c.is_whitespace() || c.is_ascii_digit());
+    let head = head.trim_end_matches('*').trim();
+    let name: String = head.chars().take(24).collect();
+    (name.chars().count() >= 2).then_some(name)
+}
+
+/// "javaw.exe" becomes "Javaw".
+fn exe_label(exe: &str) -> String {
+    let stem = exe.strip_suffix(".exe").or_else(|| exe.strip_suffix(".EXE")).unwrap_or(exe);
+    let mut c = stem.chars();
+    c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default()
 }
 
 /// Remembers which hotkeys Windows refused and says so on screen. A clip key that does
@@ -1048,6 +1181,8 @@ fn refresh_overlay(app: &App, overlay: Option<&Overlay>) {
         None => StatusKind::Off,
     };
     let muted = pipeline.as_ref().is_some_and(|p| p.mic_muted());
+    app.prune_running();
+    let (sources, source) = app.sources();
     let clips: Vec<ClipEntry> = app.recent.lock().unwrap().iter().map(|(e, _)| e.clone()).collect();
     let cfg = app.cfg.lock().unwrap();
     let hints = PanelHints {
@@ -1066,6 +1201,8 @@ fn refresh_overlay(app: &App, overlay: Option<&Overlay>) {
         s.mic_muted = muted;
         s.panel.clips = clips;
         s.panel.hints = hints;
+        s.panel.sources = sources;
+        s.panel.source = source;
     });
 }
 
@@ -1411,6 +1548,19 @@ pub(crate) fn memory_mb() -> (f64, f64) {
         );
     }
     (pmc.WorkingSetSize as f64 / 1_048_576.0, pmc.PrivateUsage as f64 / 1_048_576.0)
+}
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+
+    #[test]
+    fn names_from_titles_and_exes() {
+        assert_eq!(short_title("Minecraft* 26.2 - Multiplayer (3rd-party Server)").as_deref(), Some("Minecraft"));
+        assert_eq!(short_title("Hollow Knight").as_deref(), Some("Hollow Knight"));
+        assert_eq!(short_title("").as_deref(), None);
+        assert_eq!(exe_label("javaw.exe"), "Javaw");
+    }
 }
 
 #[cfg(test)]
