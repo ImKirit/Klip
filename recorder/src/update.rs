@@ -106,11 +106,11 @@ pub fn check(cache: &Path) -> Res<Option<Ready>> {
 }
 
 /// Starts the setup silently into `dir`. It stops this recorder and starts the new one.
+/// NSIS wants the folder as the last argument, as `/D=` and without quotes.
 pub fn install(ready: &Ready, dir: &Path) -> Res<()> {
+    use std::os::windows::process::CommandExt;
     std::process::Command::new(&ready.setup)
-        .arg("/S")
-        .arg("--dir")
-        .arg(dir)
+        .raw_arg(format!("/S /D={}", dir.display()))
         .current_dir(std::env::temp_dir())
         .spawn()
         .map(|_| ())

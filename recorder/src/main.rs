@@ -88,6 +88,8 @@ struct Args {
     /// Length of the clip saved in test mode.
     test_clip: u32,
     list: bool,
+    /// Asks a running recorder to leave and waits until it is gone. Used by the setup.
+    quit: bool,
     /// Test only: look for an update, download and check it into this folder, never install.
     update_check: Option<PathBuf>,
     /// Treat this exe as the game in the foreground. For tests without game detection.
@@ -110,6 +112,7 @@ fn parse_args() -> Res<Args> {
     let mut source = SourceArg::Auto;
     let (mut test_seconds, mut test_clip, mut list, mut no_tray) = (None, 30, false, false);
     let mut update_check = None;
+    let mut quit = false;
     let mut game_exe = None;
     let mut replay = None;
     let mut it = std::env::args().skip(1);
@@ -130,6 +133,7 @@ fn parse_args() -> Res<Args> {
             "--window" => source = SourceArg::Window(value()?),
             "--test" => test_seconds = Some(value()?.parse()?),
             "--list" => list = true,
+            "--quit" => quit = true,
             "--update-check" => update_check = Some(PathBuf::from(value()?)),
             "--no-audio" => cfg.audio.enabled = false,
             "--no-mic" => cfg.audio.microphone = false,
@@ -154,7 +158,7 @@ fn parse_args() -> Res<Args> {
     if cfg.fps == 0 || cfg.buffer_seconds == 0 {
         return Err("fps and buffer length must be above zero".into());
     }
-    Ok(Args { cfg, out, source, test_seconds, test_clip, list, update_check, game_exe, no_tray, replay })
+    Ok(Args { cfg, out, source, test_seconds, test_clip, list, quit, update_check, game_exe, no_tray, replay })
 }
 
 /// True when standard output goes into `recorder.log` because nobody else reads it.
@@ -434,6 +438,10 @@ fn run() -> Res<()> {
     }
     if args.list {
         return list_sources();
+    }
+    if args.quit {
+        quit_running();
+        return Ok(());
     }
     if let Some(cache) = &args.update_check {
         match update::check(cache) {
@@ -1322,6 +1330,25 @@ fn open_library(app: &App) {
 /// for finished clips that are newer than the moment the mode was switched on and not in
 /// the cloud yet. A clip counts as finished once its sidecar exists, a running recording
 /// has none. Failures wait a minute, the next round tries again, nothing is lost.
+/// Tells a running recorder to leave through its pipe, then waits up to eight seconds
+/// until the pipe is gone, so its files can be replaced.
+fn quit_running() {
+    use std::io::Write;
+    let open = || std::fs::OpenOptions::new().read(true).write(true).open(klip_core::PIPE_NAME);
+    let Ok(mut pipe) = open() else { return };
+    let _ = pipe.write_all(b"{\"cmd\":\"quit\"}
+");
+    drop(pipe);
+    for _ in 0..40 {
+        std::thread::sleep(Duration::from_millis(200));
+        if open().is_err() {
+            break;
+        }
+    }
+    // A moment more for the process itself to end after it closed its pipe.
+    std::thread::sleep(Duration::from_millis(600));
+}
+
 /// Looks for a new version now and then and installs it at a calm moment: no game, no
 /// recording, the app closed. See `update.rs`.
 fn start_updates(app: Arc<App>, notify: impl Fn(Event) + Send + 'static) {

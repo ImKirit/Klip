@@ -236,8 +236,14 @@ Explorer and the library follows.
 
 ## Install
 
-Build it from source. You need Rust (MSVC toolchain), Node.js and the WebView2 runtime, which
-Windows 11 already has.
+Download `Klip-Setup.exe` from [Releases](https://github.com/ImKirit/Klip/releases/latest)
+and run it. The setup asks where to install (default `%LOCALAPPDATA%\Programs\Klip`, per
+user, no admin rights), shows the two keys worth knowing, and lets you choose autostart and
+a desktop shortcut. "Installed apps" removes everything again. Settings and clips stay.
+
+Or build it from source. You need Rust (MSVC toolchain), Node.js, the WebView2 runtime
+(Windows 11 has it) and [NSIS](https://nsis.sourceforge.io) 3, either installed or unpacked
+into `tools\nsis`.
 
 ```powershell
 cd app
@@ -246,9 +252,8 @@ cd ..
 powershell -ExecutionPolicy Bypass -File scripts\stage.ps1
 ```
 
-This builds the recorder and the app and packs them into `target\release\klip-setup.exe`.
-The setup installs per user into `%LOCALAPPDATA%\Programs\Klip`, without admin rights, and
-removes everything again through "Installed apps". Settings and clips stay.
+This builds the recorder and the app and packs them with `installer\nsis\klip.nsi` into
+`target\release\Klip-Setup.exe`. Silent install: `Klip-Setup.exe /S /D=<folder>`.
 
 **Updates.** An installed Klip looks at GitHub Releases after the start and every six hours.
 A newer `Klip-Setup.exe` is downloaded, checked against the SHA256 line of the release text

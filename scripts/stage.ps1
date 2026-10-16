@@ -1,4 +1,4 @@
-# Collects everything the setup program carries into dist-stage and builds the setup.
+# Collects everything the setup carries into dist-stage and builds the NSIS setup.
 #   scripts\stage.ps1            build the release binaries first, then stage and pack
 #   scripts\stage.ps1 -NoBuild   stage what is already built
 param([switch]$NoBuild)
@@ -49,11 +49,18 @@ if (Test-Path $fontsource) {
     }
 }
 
-Push-Location $root
-cargo build --release -p klip-setup
+# The setup is an NSIS installer (installer\nsis\klip.nsi). makensis comes from tools\nsis
+# in the project or from an NSIS installation.
+$version = (Select-String -Path (Join-Path $root 'Cargo.toml') -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
+$makensis = @(
+    (Join-Path $root 'tools\nsis\makensis.exe'),
+    "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+    "$env:ProgramFiles\NSIS\makensis.exe"
+) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+if (-not $makensis) { throw 'makensis not found: install NSIS or put it into tools\nsis' }
+$setup = Join-Path $root 'target\release\Klip-Setup.exe'
+& $makensis /V2 "/DVERSION=$version" "/DSTAGE=$stage" "/DOUTFILE=$setup" (Join-Path $root 'installer\nsis\klip.nsi')
 if ($LASTEXITCODE -ne 0) { throw 'setup build failed' }
-Pop-Location
 
-$setup = Join-Path $root 'target\release\klip-setup.exe'
-'{0}  {1:N1} MB' -f $setup, ((Get-Item $setup).Length / 1MB)
+'{0}  {1:N1} MB, version {2}' -f $setup, ((Get-Item $setup).Length / 1MB), $version
 Get-ChildItem $stage -Recurse -File | ForEach-Object { '  {0,-40} {1,10:N0} KB' -f $_.FullName.Substring($stage.Length + 1), ($_.Length / 1KB) }

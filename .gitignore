@@ -25,3 +25,6 @@ Claude/drafts/
 
 # Klip Cloud data of local test runs.
 /cloud/data/
+
+# Build tools fetched locally (NSIS), not part of the repo.
+/tools/
