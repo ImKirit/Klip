@@ -1060,7 +1060,8 @@ function LanguagePage() {
 }
 
 function BackupPage() {
-  const { env, saveConfig, saveSettings } = useApp();
+  const { env, saveConfig, saveSettings, recorder } = useApp();
+  const { config, set } = useConfig();
   const toast = useToast();
   const [path, setPath] = useState(`${env.data_dir}\\klip-settings.json`);
   const exportTo = async () => {
@@ -1091,6 +1092,11 @@ function BackupPage() {
   return (
     <>
       <Lead>{t("bk.lead")}</Lead>
+      <Card title={t("up.title")}>
+        <Row label={t("up.auto")} help={t("up.autoHelp")} info={recorder?.status?.version ? t("up.version", recorder.status.version) : undefined}>
+          <Toggle checked={config.auto_update !== false} label={t("up.auto")} onChange={(auto_update) => set({ auto_update })} />
+        </Row>
+      </Card>
       <Card title={t("bk.file")}>
         {isTauri ? null : (
           <Row stacked label={t("bk.file")} help={t("bk.fileHelp")}>

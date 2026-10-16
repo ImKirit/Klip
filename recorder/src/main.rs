@@ -22,6 +22,7 @@ mod replay;
 mod ring;
 mod shot;
 mod tap;
+mod update;
 
 use klip_core::{BufferMode, Config, HotkeyAction, IpcRequest, IpcResponse, Language, MonitorChoice, RecorderStatus, VideoCodec};
 use klip_games::{GameCatalog, GameEvent, GameWatcher, ManualList, RunningGame, WatcherOptions};
@@ -87,6 +88,8 @@ struct Args {
     /// Length of the clip saved in test mode.
     test_clip: u32,
     list: bool,
+    /// Test only: look for an update, download and check it into this folder, never install.
+    update_check: Option<PathBuf>,
     /// Treat this exe as the game in the foreground. For tests without game detection.
     game_exe: Option<String>,
     no_tray: bool,
@@ -106,6 +109,7 @@ fn parse_args() -> Res<Args> {
     let mut out = None;
     let mut source = SourceArg::Auto;
     let (mut test_seconds, mut test_clip, mut list, mut no_tray) = (None, 30, false, false);
+    let mut update_check = None;
     let mut game_exe = None;
     let mut replay = None;
     let mut it = std::env::args().skip(1);
@@ -126,6 +130,7 @@ fn parse_args() -> Res<Args> {
             "--window" => source = SourceArg::Window(value()?),
             "--test" => test_seconds = Some(value()?.parse()?),
             "--list" => list = true,
+            "--update-check" => update_check = Some(PathBuf::from(value()?)),
             "--no-audio" => cfg.audio.enabled = false,
             "--no-mic" => cfg.audio.microphone = false,
             "--no-input" => cfg.input.enabled = false,
@@ -149,7 +154,7 @@ fn parse_args() -> Res<Args> {
     if cfg.fps == 0 || cfg.buffer_seconds == 0 {
         return Err("fps and buffer length must be above zero".into());
     }
-    Ok(Args { cfg, out, source, test_seconds, test_clip, list, game_exe, no_tray, replay })
+    Ok(Args { cfg, out, source, test_seconds, test_clip, list, update_check, game_exe, no_tray, replay })
 }
 
 /// True when standard output goes into `recorder.log` because nobody else reads it.
@@ -212,6 +217,8 @@ enum Event {
     Live(Option<(klip_input::OverlayLayout, klip_input::Held)>),
     /// Every five seconds: measurements and the guards of a running recording.
     Tick,
+    /// An update to this version starts in a moment.
+    Updating(String),
 }
 
 /// A program a clip can be credited to: a recognised game, or an unknown fullscreen
@@ -428,6 +435,14 @@ fn run() -> Res<()> {
     if args.list {
         return list_sources();
     }
+    if let Some(cache) = &args.update_check {
+        match update::check(cache) {
+            Ok(Some(ready)) => println!("update: {} ready at {}", ready.version, ready.setup.display()),
+            Ok(None) => println!("update: {} is the newest version", env!("CARGO_PKG_VERSION")),
+            Err(e) => println!("update: {e}"),
+        }
+        return Ok(());
+    }
     let main_thread = unsafe { GetCurrentThreadId() };
     MAIN_THREAD.store(main_thread, Ordering::Release);
     let testing = args.test_seconds.is_some() || args.replay.is_some();
@@ -638,6 +653,10 @@ fn run() -> Res<()> {
         problems.iter().for_each(|p| println!("hotkey problem: {p}"));
         warn_hotkeys(&app, overlay.as_ref(), problems);
         start_cloud_uploads(app.clone());
+        if !testing {
+            let update_tx = tx.clone();
+            start_updates(app.clone(), move |e| wake(&update_tx, e));
+        }
 
         // The app talks to the recorder through a pipe. Actions run right on the pipe
         // thread, only things bound to the main thread (hotkeys, leaving) are posted over.
@@ -758,6 +777,16 @@ fn run() -> Res<()> {
                                 }
                             }
                             Event::Game(e) => on_game_event(&app, e),
+                            Event::Updating(version) => {
+                                if let Some(o) = &overlay {
+                                    let de = app.cfg.lock().unwrap().language == Language::De;
+                                    o.toast(if de {
+                                        Toast::new(&format!("Klip wird auf {version} aktualisiert"), "Gleich wieder da")
+                                    } else {
+                                        Toast::new(&format!("Updating Klip to {version}"), "Back in a moment")
+                                    });
+                                }
+                            }
                             Event::Announce(action, was_recording) => {
                                 announce(&app, overlay.as_ref(), &action, was_recording)
                             }
@@ -1293,6 +1322,60 @@ fn open_library(app: &App) {
 /// for finished clips that are newer than the moment the mode was switched on and not in
 /// the cloud yet. A clip counts as finished once its sidecar exists, a running recording
 /// has none. Failures wait a minute, the next round tries again, nothing is lost.
+/// Looks for a new version now and then and installs it at a calm moment: no game, no
+/// recording, the app closed. See `update.rs`.
+fn start_updates(app: Arc<App>, notify: impl Fn(Event) + Send + 'static) {
+    let Some(dir) = update::install_dir() else {
+        println!("update: not an installed copy, no automatic updates");
+        return;
+    };
+    let _ = std::thread::Builder::new().name("klip-update".into()).spawn(move || {
+        std::thread::sleep(Duration::from_secs(90));
+        loop {
+            let (wanted, cache) = {
+                let cfg = app.cfg.lock().unwrap();
+                (cfg.auto_update, cfg.cache_dir().join("update"))
+            };
+            if wanted {
+                match update::check(&cache) {
+                    Ok(None) => println!("update: {} is the newest version", env!("CARGO_PKG_VERSION")),
+                    Ok(Some(ready)) => {
+                        println!("update: {} downloaded and checked, waiting for a calm moment", ready.version);
+                        // Every minute, at most until the next look at GitHub.
+                        for _ in 0..6 * 60 {
+                            if !app.cfg.lock().unwrap().auto_update {
+                                break;
+                            }
+                            let busy = app.game.lock().unwrap().is_some()
+                                || app.current().is_some_and(|p| p.is_recording())
+                                || update::app_running();
+                            if !busy {
+                                notify(Event::Updating(ready.version.clone()));
+                                std::thread::sleep(Duration::from_secs(3));
+                                if std::env::var_os("KLIP_UPDATE_DRY").is_some() {
+                                    println!("update: dry run, would start {} /S --dir {}", ready.setup.display(), dir.display());
+                                    break;
+                                }
+                                match update::install(&ready, &dir) {
+                                    Ok(()) => {
+                                        println!("update: setup for {} started", ready.version);
+                                        return;
+                                    }
+                                    Err(e) => eprintln!("klip-recorder: update not installed: {e}"),
+                                }
+                                break;
+                            }
+                            std::thread::sleep(Duration::from_secs(60));
+                        }
+                    }
+                    Err(e) => eprintln!("klip-recorder: update check: {e}"),
+                }
+            }
+            std::thread::sleep(Duration::from_secs(6 * 3600));
+        }
+    });
+}
+
 fn start_cloud_uploads(app: Arc<App>) {
     let started = std::time::SystemTime::now();
     let _ = std::thread::Builder::new().name("klip-cloud".into()).spawn(move || loop {

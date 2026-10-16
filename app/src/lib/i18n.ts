@@ -363,7 +363,14 @@ const TABLE = {
   "set.export": ["Export", "Export"],
   "set.appearance": ["Appearance", "Erscheinungsbild"],
   "set.language": ["Language", "Sprache"],
-  "set.backup": ["Backup", "Sichern"],
+  "set.backup": ["Backup & updates", "Sichern & Updates"],
+  "up.title": ["Updates", "Updates"],
+  "up.auto": ["Install updates automatically", "Updates automatisch installieren"],
+  "up.autoHelp": [
+    "Klip looks for a new version on GitHub after the start and every six hours. A new one is downloaded, checked against its SHA256 and installed only when no game runs, nothing is recorded and this app is closed. Settings and clips stay.",
+    "Klip sucht nach dem Start und alle sechs Stunden auf GitHub nach einer neuen Version. Eine neue wird heruntergeladen, gegen ihre SHA256 geprüft und erst installiert, wenn kein Spiel läuft, nichts aufgenommen wird und diese App geschlossen ist. Einstellungen und Clips bleiben.",
+  ],
+  "up.version": ["Installed: {0}", "Installiert: {0}"],
   "set.cloud": ["Cloud", "Cloud"],
   "cl.soon": ["Soon", "Bald"],
   "cl.soonNote": [

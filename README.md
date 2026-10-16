@@ -250,6 +250,11 @@ This builds the recorder and the app and packs them into `target\release\klip-se
 The setup installs per user into `%LOCALAPPDATA%\Programs\Klip`, without admin rights, and
 removes everything again through "Installed apps". Settings and clips stay.
 
+**Updates.** An installed Klip looks at GitHub Releases after the start and every six hours.
+A newer `Klip-Setup.exe` is downloaded, checked against the SHA256 line of the release text
+and installed silently once no game runs, nothing is recorded and the app is closed. Off
+under Settings, Backup & updates.
+
 **FFmpeg is not included.** Thumbnails, audio in the editor and export need `ffmpeg.exe`.
 Set its path in the app settings, the default is `C:\ffmpeg\bin\ffmpeg.exe`.
 

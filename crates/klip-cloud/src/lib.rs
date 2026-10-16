@@ -15,6 +15,11 @@ use std::time::Duration;
 
 pub type Res<T> = Result<T, String>;
 
+/// The HTTP client Klip uses everywhere: Windows TLS, a Klip user agent, sane timeouts.
+pub fn http() -> ureq::Agent {
+    agent()
+}
+
 fn agent() -> ureq::Agent {
     let tls = native_tls::TlsConnector::new().map(Arc::new);
     let mut builder = ureq::AgentBuilder::new()

@@ -426,6 +426,8 @@ pub struct Config {
     pub camera: CameraConfig,
     /// Klip Cloud, off by default.
     pub cloud: CloudConfig,
+    /// Look for new versions on GitHub and install them at a calm moment.
+    pub auto_update: bool,
     pub language: Language,
     /// Accent colour as "#RRGGBB", shared by app, tray and overlay.
     pub accent: String,
@@ -460,6 +462,7 @@ impl Default for Config {
             monitor: MonitorChoice::Primary,
             camera: CameraConfig::default(),
             cloud: CloudConfig::default(),
+            auto_update: true,
             language: Language::En,
             accent: DEFAULT_ACCENT.to_string(),
             cache_dir: None,

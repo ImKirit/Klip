@@ -148,6 +148,8 @@ export interface Config {
   monitor?: MonitorChoice;
   /** Klip Cloud. Missing in files of older versions, then off. */
   cloud?: CloudSettings;
+  /** Look for new versions on GitHub and install them at a calm moment. */
+  auto_update?: boolean;
   /** The webcam. Missing in files of older versions, then off. */
   camera?: { enabled: boolean; device: string | null; corner: Corner; size_percent: number };
   /** Language of every visible text: "en" or "de". */
