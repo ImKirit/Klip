@@ -1,6 +1,6 @@
 {
   "name": "klip-cloud",
-  "version": "1.0.0-beta.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Klip Cloud: stores clips of Klip on your own server or in your Google Drive, with Discord login and a web page for the phone.",
   "type": "module",

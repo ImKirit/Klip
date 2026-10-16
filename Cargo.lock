@@ -232,7 +232,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "klip-cloud"
-version = "1.0.0-beta.1"
+version = "0.1.0"
 dependencies = [
  "base64",
  "klip-core",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "klip-core"
-version = "1.0.0-beta.1"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -253,7 +253,7 @@ dependencies = [
 
 [[package]]
 name = "klip-detect"
-version = "1.0.0-beta.1"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -261,7 +261,7 @@ dependencies = [
 
 [[package]]
 name = "klip-games"
-version = "1.0.0-beta.1"
+version = "0.1.0"
 dependencies = [
  "klip-core",
  "serde",
@@ -271,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "klip-input"
-version = "1.0.0-beta.1"
+version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -280,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "klip-overlay"
-version = "1.0.0-beta.1"
+version = "0.1.0"
 dependencies = [
  "klip-input",
  "windows",
@@ -289,7 +289,7 @@ dependencies = [
 
 [[package]]
 name = "klip-recorder"
-version = "1.0.0-beta.1"
+version = "0.1.0"
 dependencies = [
  "klip-cloud",
  "klip-core",
@@ -306,7 +306,7 @@ dependencies = [
 
 [[package]]
 name = "klip-setup"
-version = "1.0.0-beta.1"
+version = "0.1.0"
 dependencies = [
  "klip-core",
  "klip-tray",
@@ -315,7 +315,7 @@ dependencies = [
 
 [[package]]
 name = "klip-tray"
-version = "1.0.0-beta.1"
+version = "0.1.0"
 dependencies = [
  "windows",
 ]
