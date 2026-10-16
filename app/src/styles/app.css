@@ -2457,7 +2457,7 @@ input[type="range"]:disabled::-webkit-slider-thumb {
   text-transform: none;
 }
 
-/* Glass, version 3.1. Surfaces are tinted panes instead of solid blocks, floating
+/* Glass, version 3.1. (3.2: the window itself is solid black now, see the end.) Surfaces are tinted panes instead of solid blocks, floating
    things (menus, dialogs, notices) are frosted. On Windows 11 the window itself gets
    Mica and the desktop shimmers through faintly (`data-glass`, set by the app). Still no
    gradients and no glow, the colours stay those of version 3. */
@@ -2692,4 +2692,66 @@ input[type="range"]:disabled::-webkit-slider-thumb {
 
 .welcome-actions .btn {
   justify-content: center;
+}
+
+/* Version 3.2, black and high contrast (owner, 2026-10-16): a real black ground instead of
+   the grey of Mica, brighter text, a little more edge on the panes. The frosted glass of
+   menus, dialogs and notices stays. */
+:root:not([data-theme="light"]) {
+  --bg: #000000;
+  --p1: rgba(255, 255, 255, 0.045);
+  --p2: rgba(255, 255, 255, 0.08);
+  --p3: rgba(255, 255, 255, 0.13);
+  --line: rgba(255, 255, 255, 0.11);
+  --tx: #ffffff;
+  --mu: #a9a9be;
+  --dim: #6f6f88;
+  --glass: rgba(14, 13, 22, 0.8);
+}
+
+:root:not([data-theme="light"]) body {
+  background: #000000;
+}
+
+.rail,
+.hud {
+  background: #07070a;
+}
+
+:root[data-theme="light"] .rail,
+:root[data-theme="light"] .hud {
+  background: var(--p1);
+}
+
+/* The window buttons, top right. No box on hover: the sign lights up, the cross in red. */
+.winbtns {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  margin-left: 2px;
+  padding-right: 8px;
+}
+
+.winbtn {
+  width: 44px;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  color: var(--mu);
+  transition: color 0.12s;
+}
+
+.winbtn:hover {
+  color: var(--tx);
+}
+
+.winbtn-close:hover {
+  color: var(--rec);
+}
+
+.hud {
+  padding-right: 0;
+  user-select: none;
 }

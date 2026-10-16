@@ -1104,7 +1104,9 @@ fn open_url(url: &str) -> R {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err("only web addresses can be opened".into());
     }
-    Command::new("explorer.exe").arg(url).spawn().map_err(err("open the browser"))?;
+    // explorer.exe drops addresses with a query ("?code=...") on many machines. The URL
+    // handler of Windows opens them in the default browser like a click on a link.
+    Command::new("rundll32.exe").arg("url.dll,FileProtocolHandler").arg(url).spawn().map_err(err("open the browser"))?;
     Ok(Value::Null)
 }
 

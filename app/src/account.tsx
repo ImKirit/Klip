@@ -22,6 +22,8 @@ interface AccountState {
   account: CloudAccount | null;
   /** The code to confirm in the browser while a sign in runs. */
   linking: string | null;
+  /** The page where the code is confirmed, to open it again by hand. */
+  linkUrl: string | null;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
   reload: () => Promise<void>;
@@ -43,6 +45,7 @@ export function AccountProvider(props: { children: ReactNode }) {
   const server = clean(config.cloud?.server || DEFAULT_CLOUD_SERVER);
   const [stored, setStored] = useState<CloudAccount | null>(null);
   const [linking, setLinking] = useState<string | null>(null);
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
   const running = useRef(false);
 
   const reload = useCallback(async () => {
@@ -63,6 +66,7 @@ export function AccountProvider(props: { children: ReactNode }) {
     try {
       const link = await call<{ device_code: string; user_code: string; verify_url: string; interval: number; expires_in: number }>("cloud_link_start", { server });
       setLinking(link.user_code);
+      setLinkUrl(link.verify_url);
       await call("open_url", { url: link.verify_url }).catch(() => window.open(link.verify_url, "_blank"));
       const until = Date.now() + link.expires_in * 1000;
       while (Date.now() < until) {
@@ -78,6 +82,7 @@ export function AccountProvider(props: { children: ReactNode }) {
     } finally {
       running.current = false;
       setLinking(null);
+      setLinkUrl(null);
       await reload();
     }
   }, [server, toast, reload]);
@@ -88,7 +93,7 @@ export function AccountProvider(props: { children: ReactNode }) {
   }, [toast, reload]);
 
   const account = stored && clean(stored.server) === server ? stored : null;
-  return <Context.Provider value={{ account, linking, signIn, signOut, reload }}>{props.children}</Context.Provider>;
+  return <Context.Provider value={{ account, linking, linkUrl, signIn, signOut, reload }}>{props.children}</Context.Provider>;
 }
 
 /** The Discord picture, or the first letter when there is none or it does not load. */

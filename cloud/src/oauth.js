@@ -19,7 +19,6 @@ export function discordLoginUrl(cfg, state, fakeUser = "") {
     redirect_uri: `${cfg.baseUrl}/auth/discord/callback`,
     scope: "identify",
     state,
-    prompt: "none",
   });
   return `${DISCORD_AUTHORIZE}?${q}`;
 }

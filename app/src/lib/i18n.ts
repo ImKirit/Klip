@@ -388,6 +388,11 @@ const TABLE = {
   "acc.waiting": ["Code {0}", "Code {0}"],
   "acc.menu": ["Account and settings", "Konto und Einstellungen"],
   "acc.cloud": ["Account & Cloud", "Konto & Cloud"],
+  "win.min": ["Minimise", "Minimieren"],
+  "win.max": ["Maximise", "Maximieren"],
+  "win.restore": ["Restore", "Verkleinern"],
+  "win.close": ["Close", "Schließen"],
+  "acc.openLink": ["Open the sign in page ({0})", "Anmeldeseite öffnen ({0})"],
   "cl.viaDiscord": ["Signed in with Discord", "Mit Discord angemeldet"],
   "cl.uploadSoon": ["Upload to Klip Cloud (coming soon)", "In die Klip Cloud laden (kommt bald)"],
   "cl.lead": [

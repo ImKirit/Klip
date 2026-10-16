@@ -2,12 +2,13 @@
 // state of the recorder and the storage live in the HUD bar, never in a box.
 
 import logo from "../assets/logo.svg";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { Camera, ChevronDown, Cloud, LayoutGrid, LogIn, LogOut, Scissors, Settings as SettingsIcon, Sparkles, Star, UserRound, Video } from "lucide-react";
 import { Avatar, useAccount } from "../account";
-import { call, errorText } from "../lib/api";
+import { call, errorText, isTauri } from "../lib/api";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { formatBytes, formatDuration } from "../lib/format";
 import { t, tn } from "../lib/i18n";
 import type { Key } from "../lib/i18n";
@@ -137,7 +138,7 @@ function Readouts() {
 /** Top right: the account. Signed in it shows the Discord name and picture, signed out a
  *  sign in button. Either way it opens the menu that leads to the settings. */
 function AccountButton() {
-  const { account, linking, signIn, signOut } = useAccount();
+  const { account, linking, linkUrl, signIn, signOut } = useAccount();
   const { go } = useApp();
   const ref = useRef<HTMLButtonElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -146,7 +147,11 @@ function AccountButton() {
     if (r) setMenu({ x: r.right, y: r.bottom + 6 });
   };
   const items: MenuItem[] = [
-    ...(account ? [] : [{ label: t("cl.signIn"), icon: <LogIn size={15} />, disabled: linking !== null, onClick: () => void signIn() }]),
+    ...(account
+      ? []
+      : linkUrl
+        ? [{ label: t("acc.openLink", linking ?? ""), icon: <LogIn size={15} />, onClick: () => void call("open_url", { url: linkUrl }).catch(() => window.open(linkUrl, "_blank")) }]
+        : [{ label: t("cl.signIn"), icon: <LogIn size={15} />, onClick: () => void signIn() }]),
     { label: t("nav.settings"), icon: <SettingsIcon size={15} />, separator: !account, onClick: () => go({ view: "settings", page: "recording" }) },
     { label: t("acc.cloud"), icon: <Cloud size={15} />, onClick: () => go({ view: "settings", page: "cloud" }) },
     ...(account ? [{ label: t("cl.signOut"), icon: <LogOut size={15} />, separator: true, danger: true, onClick: () => void signOut() }] : []),
@@ -175,16 +180,69 @@ function AccountButton() {
   );
 }
 
+/** Anything you click on in the HUD bar. Everywhere else the bar moves the window. */
+const INTERACTIVE = "button, a, input, select, textarea, label, [role='button'], [role='radio'], [role='menu'], .account";
+
+function dragWindow(e: React.MouseEvent) {
+  if (!isTauri || e.button !== 0 || (e.target as HTMLElement).closest(INTERACTIVE)) return;
+  const win = getCurrentWindow();
+  if (e.detail === 2) void win.toggleMaximize();
+  else void win.startDragging();
+}
+
+/** Minimise, maximise and close, drawn by Klip instead of Windows. No box on hover, only
+ *  the sign lights up, the cross in red. */
+function WindowButtons() {
+  const [maximized, setMaximized] = useState(false);
+  useEffect(() => {
+    if (!isTauri) return;
+    const win = getCurrentWindow();
+    void win.isMaximized().then(setMaximized);
+    const off = win.onResized(() => void win.isMaximized().then(setMaximized));
+    return () => void off.then((f) => f());
+  }, []);
+  if (!isTauri) return null;
+  const win = getCurrentWindow();
+  const props = { width: 18, height: 18, viewBox: "0 0 18 18", fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const };
+  return (
+    <div className="winbtns">
+      <button type="button" className="winbtn" title={t("win.min")} onClick={() => void win.minimize()}>
+        <svg {...props}>
+          <path d="M3.5 9h11" />
+        </svg>
+      </button>
+      <button type="button" className="winbtn" title={maximized ? t("win.restore") : t("win.max")} onClick={() => void win.toggleMaximize()}>
+        {maximized ? (
+          <svg {...props}>
+            <rect x="3.5" y="6" width="8.5" height="8.5" rx="1.5" />
+            <path d="M6.5 6V4.8c0-.7.6-1.3 1.3-1.3h5.4c.7 0 1.3.6 1.3 1.3v5.4c0 .7-.6 1.3-1.3 1.3H12" />
+          </svg>
+        ) : (
+          <svg {...props}>
+            <rect x="3.5" y="3.5" width="11" height="11" rx="1.8" />
+          </svg>
+        )}
+      </button>
+      <button type="button" className="winbtn winbtn-close" title={t("win.close")} onClick={() => void win.close()}>
+        <svg {...props}>
+          <path d="m4 4 10 10M14 4 4 14" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export function Shell(props: { title: string; sub?: ReactNode; hud?: ReactNode; busy?: boolean; children: ReactNode }) {
   return (
     <div className="app">
       <Rail />
-      <header className={`hud${props.busy ? " is-busy" : ""}`}>
+      <header className={`hud${props.busy ? " is-busy" : ""}`} onMouseDown={dragWindow}>
         <h1 title={props.title}>{props.title}</h1>
         {props.sub ? <span className="lbl hud-sub">{props.sub}</span> : null}
         <div className="hud-mid">{props.hud}</div>
         <Readouts />
         <AccountButton />
+        <WindowButtons />
       </header>
       {props.children}
     </div>

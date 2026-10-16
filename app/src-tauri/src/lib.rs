@@ -6,7 +6,6 @@ pub mod backend;
 use backend::Backend;
 use serde_json::Value;
 use std::sync::Arc;
-use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{AppHandle, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder};
 
 /// Lets the webview load files from the clip folder and the cache, nothing else.
@@ -65,27 +64,6 @@ fn encode(text: &str) -> String {
     out
 }
 
-/// Windows 11 (build 22000 on) can put Mica behind a transparent window. Windows 10 cannot,
-/// there the window stays solid instead of showing the bare desktop.
-fn glass_supported() -> bool {
-    #[repr(C)]
-    struct OsVersion {
-        size: u32,
-        major: u32,
-        minor: u32,
-        build: u32,
-        platform: u32,
-        csd: [u16; 128],
-    }
-    #[link(name = "ntdll")]
-    extern "system" {
-        fn RtlGetVersion(info: *mut OsVersion) -> i32;
-    }
-    let mut v = OsVersion { size: std::mem::size_of::<OsVersion>() as u32, major: 0, minor: 0, build: 0, platform: 0, csd: [0; 128] };
-    // SAFETY: the struct has the layout of OSVERSIONINFOW and its size is set.
-    unsafe { RtlGetVersion(&mut v) == 0 && v.build >= 22000 }
-}
-
 pub fn run() {
     let backend = Arc::new(Backend::new());
     let on_exit = backend.clone();
@@ -108,12 +86,9 @@ pub fn run() {
                 .min_inner_size(1100.0, 680.0)
                 // Files are dragged out of the window, never into it.
                 .disable_drag_drop_handler();
-            if glass_supported() {
-                window = window
-                    .transparent(true)
-                    .effects(EffectsBuilder::new().effect(Effect::Mica).state(EffectState::FollowsWindowActiveState).build())
-                    .initialization_script("document.documentElement.dataset.glass = '1';");
-            }
+            // No Windows title bar: the HUD bar of the app is the handle, its own buttons
+            // minimise, maximise and close. Windows still resizes at the edges.
+            window = window.decorations(false).shadow(true);
             if let Some(mode) = selftest.as_deref() {
                 // The self test must not take the focus away from a running game.
                 window = window.focused(false).visible(mode != "hidden");
