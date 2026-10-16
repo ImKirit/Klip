@@ -11,16 +11,16 @@
 @font-face { font-family: "JetBrains Mono"; font-weight: 700; font-display: swap; src: url("fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2"); }
 
 :root {
-  --bg: #0a0a0f;
+  --bg: #000000;
   --p1: rgba(255, 255, 255, 0.04);
   --p2: rgba(255, 255, 255, 0.07);
   --p3: rgba(255, 255, 255, 0.11);
-  --line: rgba(255, 255, 255, 0.085);
+  --line: rgba(255, 255, 255, 0.11);
   --edge: rgba(255, 255, 255, 0.13);
   --hi: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --glass: rgba(16, 15, 24, 0.72);
-  --tx: #ededf7;
-  --mu: #9d9db6;
+  --glass: rgba(0, 0, 0, 0.72);
+  --tx: #ffffff;
+  --mu: #a9a9be;
   --dim: #6a6a85;
   --ac: #8b5cff;
   --ac-tx: #ffffff;
@@ -227,3 +227,19 @@ footer p { flex-basis: 100%; color: var(--dim); font-size: 13.5px; max-width: 90
 /* The panel is tall and narrow, it stays at the size it has over a game. */
 #overlay .frame { max-width: 400px; justify-self: center; }
 .pill b { white-space: nowrap; }
+
+/* Version 3.2 like the app: black and high contrast. */
+.card, .read div, .rules > div, .state > div, .keys div, .track, .get { background: #07070a; }
+
+/* The leaderboard. */
+.board { margin: 36px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; max-width: 760px; }
+.board li { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 14px; padding: 10px 18px; border-radius: var(--r); background: #07070a; border: 1px solid var(--line); }
+.board li.top1 { border-color: rgba(139, 92, 255, 0.7); box-shadow: inset 0 0 0 1px rgba(139, 92, 255, 0.25); }
+.board li.top2, .board li.top3 { border-color: rgba(255, 255, 255, 0.22); }
+.board-rank { font: 800 20px var(--f); color: var(--mu); text-align: center; }
+.top1 .board-rank { color: var(--ac); }
+.board-who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.board-pic { width: 36px; height: 36px; border-radius: 50%; flex: none; object-fit: cover; display: grid; place-items: center; background: var(--ac); color: var(--ac-tx); font: 700 15px var(--f); font-style: normal; }
+.board-name { font: 700 16px var(--f); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-count { font: 700 14px var(--f-m); color: var(--tx); }
+.board li.board-empty { display: block; color: var(--mu); text-align: center; padding: 22px; }

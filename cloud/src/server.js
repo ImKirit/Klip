@@ -62,7 +62,15 @@ function clipId() {
 }
 
 function publicUser(u) {
-  return { id: u.id, name: u.name, avatar: u.avatar, storage: u.storage, google_linked: Boolean(u.google_refresh) };
+  return {
+    id: u.id,
+    name: u.name,
+    avatar: u.avatar,
+    storage: u.storage,
+    google_linked: Boolean(u.google_refresh),
+    clips_made: u.clips_made ?? 0,
+    on_board: u.on_board !== 0,
+  };
 }
 
 function publicClip(c) {
@@ -246,6 +254,31 @@ export function createServer(cfg = loadConfig()) {
       const { user } = need(req);
       db.prepare("DELETE FROM sessions WHERE user_id = ? AND substr(token_hash, 1, 12) = ?").run(user.id, seg[2]);
       return json(res, 200, { ok: true });
+    }
+
+    // ---- leaderboard: how many clips each signed in account made, nothing else ----
+    if (m === "GET" && p === "/api/leaderboard") {
+      const rows = db
+        .prepare("SELECT name, avatar, clips_made FROM users WHERE on_board = 1 AND clips_made > 0 ORDER BY clips_made DESC, id ASC LIMIT 50")
+        .all();
+      return json(res, 200, { board: rows.map((r, i) => ({ rank: i + 1, name: r.name, avatar: r.avatar, clips: r.clips_made })) }, { "Cache-Control": "public, max-age=30" });
+    }
+    if (m === "POST" && p === "/api/stats") {
+      const { user } = need(req);
+      const body = await readJson(req);
+      // A PC sends what it saved since its last report. More than this in one go is not
+      // a person pressing a key.
+      const clips = Math.max(0, Math.min(200, Math.floor(Number(body.clips) || 0)));
+      // At most one report per ten seconds and account.
+      if (now() - (user.stats_at || 0) < 10_000) throw new HttpError(429, "too many reports, try again in a moment");
+      db.prepare("UPDATE users SET clips_made = clips_made + ?, stats_at = ? WHERE id = ?").run(clips, now(), user.id);
+      return json(res, 200, { clips_made: (user.clips_made || 0) + clips });
+    }
+    if (m === "PUT" && p === "/api/me/board") {
+      const { user } = need(req);
+      const body = await readJson(req);
+      db.prepare("UPDATE users SET on_board = ? WHERE id = ?").run(body.show === false ? 0 : 1, user.id);
+      return json(res, 200, { on_board: body.show !== false });
     }
 
     // ---- clips ----

@@ -350,6 +350,7 @@ impl Backend {
             }
             "cloud_link_poll" => klip_cloud::poll_link(str_arg(a, "server")?, str_arg(a, "device_code")?).map(|p| json!(p)),
             "cloud_sign_out" => klip_cloud::sign_out().map(|_| Value::Null),
+            "cloud_board" => klip_cloud::set_on_board(a.get("show").and_then(|v| v.as_bool()).unwrap_or(true)).map(|_| Value::Null),
             "cloud_upload" => {
                 let video = in_clip_dir(str_arg(a, "path")?)?;
                 let cfg = Config::load().unwrap_or_default().cloud;

@@ -66,6 +66,11 @@ export function openDb(dataDir) {
     );
     CREATE INDEX IF NOT EXISTS clips_by_user ON clips(user_id, created);
   `);
+  // Added later: the leaderboard. Old databases get the columns once.
+  const columns = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
+  if (!columns.includes("clips_made")) db.exec("ALTER TABLE users ADD COLUMN clips_made INTEGER NOT NULL DEFAULT 0");
+  if (!columns.includes("on_board")) db.exec("ALTER TABLE users ADD COLUMN on_board INTEGER NOT NULL DEFAULT 1");
+  if (!columns.includes("stats_at")) db.exec("ALTER TABLE users ADD COLUMN stats_at INTEGER NOT NULL DEFAULT 0");
   return db;
 }
 

@@ -88,6 +88,10 @@ pub struct Account {
     pub server: String,
     pub name: String,
     pub avatar: Option<String>,
+    /// Clips counted for the leaderboard, and whether the account shows up there. Only
+    /// known after a look at the server.
+    pub clips_made: Option<u64>,
+    pub on_board: Option<bool>,
 }
 
 fn stored() -> Option<Stored> {
@@ -96,19 +100,22 @@ fn stored() -> Option<Stored> {
 
 pub fn account() -> Option<Account> {
     let s = stored()?;
-    Some(Account { server: s.server, name: s.name, avatar: s.avatar })
+    Some(Account { server: s.server, name: s.name, avatar: s.avatar, clips_made: None, on_board: None })
 }
 
 /// Asks the server for the current name and picture, a changed Discord profile shows up
 /// in Klip this way. Falls back to what is stored when the server cannot be reached.
 pub fn account_fresh() -> Option<Account> {
     let mut s = stored()?;
+    let (mut clips_made, mut on_board) = (None, None);
     if let Ok(token) = token_for(&s.server) {
         let res = agent().get(&url(&s.server, "/api/me")).set("Authorization", &format!("Bearer {token}")).call();
         if let Ok(body) = res.map_err(explain).and_then(|r| r.into_json::<serde_json::Value>().map_err(|e| e.to_string())) {
             if let Some(user) = body.get("user").filter(|u| u.is_object()) {
                 let name = user.get("name").and_then(|n| n.as_str()).unwrap_or(&s.name).to_string();
                 let avatar = user.get("avatar").and_then(|a| a.as_str()).map(str::to_string);
+                clips_made = user.get("clips_made").and_then(|c| c.as_u64());
+                on_board = user.get("on_board").and_then(|b| b.as_bool());
                 if name != s.name || avatar != s.avatar {
                     s.name = name;
                     s.avatar = avatar;
@@ -117,7 +124,32 @@ pub fn account_fresh() -> Option<Account> {
             }
         }
     }
-    Some(Account { server: s.server, name: s.name, avatar: s.avatar })
+    Some(Account { server: s.server, name: s.name, avatar: s.avatar, clips_made, on_board })
+}
+
+/// Adds `clips` to the count of the signed in account on the leaderboard. Only the number
+/// leaves the PC, never a clip.
+pub fn report_clips(clips: u32) -> Res<()> {
+    let s = stored().ok_or("this PC is not signed in to Klip Cloud")?;
+    let token = token_for(&s.server)?;
+    agent()
+        .post(&url(&s.server, "/api/stats"))
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(serde_json::json!({ "clips": clips }))
+        .map_err(explain)?;
+    Ok(())
+}
+
+/// Shows or hides the signed in account on the public leaderboard.
+pub fn set_on_board(show: bool) -> Res<()> {
+    let s = stored().ok_or("this PC is not signed in to Klip Cloud")?;
+    let token = token_for(&s.server)?;
+    agent()
+        .put(&url(&s.server, "/api/me/board"))
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(serde_json::json!({ "show": show }))
+        .map_err(explain)?;
+    Ok(())
 }
 
 /// The token for `server`, if this PC is linked to it.

@@ -15,6 +15,9 @@ export interface CloudAccount {
   server: string;
   name: string;
   avatar: string | null;
+  /** From the server, missing while it cannot be reached. */
+  clips_made?: number | null;
+  on_board?: boolean | null;
 }
 
 interface AccountState {

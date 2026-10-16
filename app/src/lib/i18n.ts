@@ -379,8 +379,8 @@ const TABLE = {
   ],
   "wel.title": ["Welcome to Klip", "Willkommen bei Klip"],
   "wel.text": [
-    "Sign in with Discord and Klip knows you: your name and picture sit top right, and once Klip Cloud opens, your clips show up on your phone too. Without signing in everything else works the same.",
-    "Melde dich mit Discord an, dann kennt dich Klip: Name und Bild stehen oben rechts, und sobald Klip Cloud startet, siehst du deine Clips auch auf dem Handy. Ohne Anmeldung funktioniert alles andere genauso.",
+    "Sign in with Discord and Klip knows you: your name and picture sit top right, your clips count for the leaderboard on imkirit.dev/klip (only the number, you can switch it off), and once Klip Cloud opens, your clips show up on your phone too. Without signing in everything else works the same.",
+    "Melde dich mit Discord an, dann kennt dich Klip: Name und Bild stehen oben rechts, deine Clips zählen für die Rangliste auf imkirit.dev/klip (nur die Zahl, abschaltbar), und sobald Klip Cloud startet, siehst du deine Clips auch auf dem Handy. Ohne Anmeldung funktioniert alles andere genauso.",
   ],
   "wel.skip": ["Continue without signing in", "Ohne Anmeldung fortfahren"],
   "wel.later": ["You can sign in later with the button at the top right.", "Anmelden kannst du dich später jederzeit über den Knopf oben rechts."],
@@ -388,6 +388,12 @@ const TABLE = {
   "acc.waiting": ["Code {0}", "Code {0}"],
   "acc.menu": ["Account and settings", "Konto und Einstellungen"],
   "acc.cloud": ["Account & Cloud", "Konto & Cloud"],
+  "cl.board": ["Show me on the leaderboard", "Auf der Rangliste zeigen"],
+  "cl.boardHelp": [
+    "imkirit.dev/klip lists who saved the most clips: Discord name, picture and the number. Only that number leaves your PC, never a clip. Off removes you from the list.",
+    "imkirit.dev/klip zeigt, wer die meisten Clips gespeichert hat: Discord-Name, Bild und die Zahl. Nur diese Zahl verlässt deinen PC, nie ein Clip. Aus nimmt dich von der Liste.",
+  ],
+  "cl.boardCount": ["{0} clips counted", "{0} Clips gezählt"],
   "win.min": ["Minimise", "Minimieren"],
   "win.max": ["Maximise", "Maximieren"],
   "win.restore": ["Restore", "Verkleinern"],

@@ -117,3 +117,24 @@ test("Google Drive cannot be chosen without a link", async () => {
   const res = await fetch(`${base}/api/me/storage`, { method: "PUT", headers: { Cookie: web, "X-Klip-Web": "1" }, body: JSON.stringify({ storage: "gdrive" }) });
   assert.equal(res.status, 409);
 });
+
+test("leaderboard: reports add up, hidden accounts and empty ones stay off", async () => {
+  const web = { "X-Klip-Web": "1", "Content-Type": "application/json" };
+  const a = await signIn("2001", "Ace");
+  const b = await signIn("2002", "Bee");
+  const c = await signIn("2003", "Hidden");
+  await signIn("2004", "Nothing");
+  const report = (cookie, clips) => fetch(`${base}/api/stats`, { method: "POST", headers: { ...web, Cookie: cookie }, body: JSON.stringify({ clips }) });
+  assert.equal((await report(a, 3)).status, 200);
+  assert.equal((await report(a, 1)).status, 429, "a second report within ten seconds is refused");
+  assert.equal((await report(b, 5)).status, 200);
+  assert.equal((await report(c, 9)).status, 200);
+  assert.equal((await fetch(`${base}/api/me/board`, { method: "PUT", headers: { ...web, Cookie: c }, body: JSON.stringify({ show: false }) })).status, 200);
+  // Absurd numbers are capped.
+  assert.equal((await fetch(`${base}/api/stats`, { method: "POST", headers: { ...web, Cookie: b } , body: JSON.stringify({ clips: 1e9 }) })).status, 429);
+  const board = (await (await fetch(`${base}/api/leaderboard`)).json()).board;
+  assert.deepEqual(board.map((r) => [r.rank, r.name, r.clips]), [[1, "Bee", 5], [2, "Ace", 3]]);
+  assert.ok(!JSON.stringify(board).includes("2001"), "no Discord ids on the board");
+  // Signed out nobody can report.
+  assert.equal((await fetch(`${base}/api/stats`, { method: "POST", headers: web, body: "{}" })).status, 401);
+});

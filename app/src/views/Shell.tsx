@@ -201,8 +201,8 @@ function WindowButtons() {
     const off = win.onResized(() => void win.isMaximized().then(setMaximized));
     return () => void off.then((f) => f());
   }, []);
-  if (!isTauri) return null;
-  const win = getCurrentWindow();
+  // In the browser preview they are drawn too, so the picture matches the app, and do nothing.
+  const win = isTauri ? getCurrentWindow() : { minimize: async () => {}, toggleMaximize: async () => {}, close: async () => {} };
   const props = { width: 18, height: 18, viewBox: "0 0 18 18", fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const };
   return (
     <div className="winbtns">

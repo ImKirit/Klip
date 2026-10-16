@@ -438,7 +438,8 @@ const DEFAULT_CLOUD: CloudSettings = { mode: "off", server: "https://imkirit.dev
 function CloudPage() {
   const { config, set } = useConfig();
   const { recorder } = useApp();
-  const { account, linking, signIn, signOut } = useAccount();
+  const { account, linking, signIn, signOut, reload } = useAccount();
+  const toast = useToast();
   const cloud = { ...DEFAULT_CLOUD, ...(config.cloud ?? {}) };
   const setCloud = (patch: Partial<CloudSettings>) => set({ cloud: { ...cloud, ...patch } });
   const [server, setServer] = useState(cloud.server);
@@ -468,6 +469,19 @@ function CloudPage() {
             <Button small kind="primary" disabled={linking !== null} onClick={() => void signIn()}>{t("cl.signIn")}</Button>
           </Row>
         )}
+        {signedIn && account ? (
+          <Row label={t("cl.board")} help={t("cl.boardHelp")} info={account.clips_made != null ? t("cl.boardCount", account.clips_made) : undefined}>
+            <Toggle
+              checked={account.on_board !== false}
+              label={t("cl.board")}
+              onChange={(show) =>
+                void call("cloud_board", { show })
+                  .then(reload)
+                  .catch((e) => toast(errorText(e), "error"))
+              }
+            />
+          </Row>
+        ) : null}
         <Row advanced label={t("cl.server")} help={t("cl.serverHelp")}>
           <input className="input" style={{ width: 300 }} value={server} onChange={(e) => setServer(e.target.value)} onBlur={() => server.trim() && server.trim() !== cloud.server && setCloud({ server: server.trim().replace(/\/+$/, "") })} />
         </Row>

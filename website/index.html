@@ -26,6 +26,7 @@
       <a href="#tracks" data-de="Tonspuren">Tracks</a>
       <a href="#overlay">Overlay</a>
       <a href="#anticheat">Anti-Cheat</a>
+      <a href="#board" data-de="Rangliste">Leaderboard</a>
       <a href="#cloud">Cloud</a>
       <a href="#status" data-de="Stand">Status</a>
     </nav>
@@ -169,6 +170,17 @@
     </div>
   </section>
 
+  <section id="board">
+    <div class="wrap">
+      <span class="sec" data-de="Rangliste">Leaderboard</span>
+      <h2 data-de="Wer clippt am meisten?">Who clips the most?</h2>
+      <p class="sub" data-de="Jeder, der in Klip mit Discord angemeldet ist, sammelt hier. Gezählt wird nur, wie viele Clips gespeichert wurden, nie ein Clip selbst. Wer nicht auf der Liste stehen will, schaltet es in Klip unter Konto &amp; Cloud aus.">Everyone signed in to Klip with Discord counts here. Only the number of saved clips is counted, never a clip itself. Anyone who does not want to be listed switches it off in Klip under Account &amp; Cloud.</p>
+      <ol class="board" id="board-list" aria-live="polite">
+        <li class="board-empty" data-de="Lädt die Rangliste ...">Loading the leaderboard ...</li>
+      </ol>
+    </div>
+  </section>
+
   <section id="cloud">
     <div class="wrap">
       <div class="split">
@@ -236,10 +248,55 @@
     <a href="/legal/privacy-policy/" data-de="Datenschutz">Privacy</a>
     <a href="/legal/tos/" data-de="Nutzungsbedingungen">Terms</a>
     <a href="/">imkirit.dev</a>
-    <p data-de="Diese Seite setzt keine Cookies und lädt nichts von fremden Servern. Die Bilder zeigen die laufende Oberfläche mit erzeugten Testclips. Valorant ist eine Marke von Riot Games, ShadowPlay von NVIDIA, Medal von Medal B.V. Klip steht mit keinem davon in Verbindung.">This page sets no cookies and loads nothing from other servers. The pictures show the running interface with generated test clips. Valorant is a trademark of Riot Games, ShadowPlay of NVIDIA, Medal of Medal B.V. Klip is not affiliated with any of them.</p>
+    <p data-de="Diese Seite setzt keine Cookies. Nur die Profilbilder der Rangliste kommen von Discord. Die Bilder zeigen die laufende Oberfläche mit erzeugten Testclips. Valorant ist eine Marke von Riot Games, ShadowPlay von NVIDIA, Medal von Medal B.V. Klip steht mit keinem davon in Verbindung.">This page sets no cookies. Only the profile pictures of the leaderboard come from Discord. The pictures show the running interface with generated test clips. Valorant is a trademark of Riot Games, ShadowPlay of NVIDIA, Medal of Medal B.V. Klip is not affiliated with any of them.</p>
   </div>
 </footer>
 <script>
+// The leaderboard, live from Klip Cloud on this server.
+(function () {
+  var list = document.getElementById("board-list");
+  function de() { return document.documentElement.lang === "de"; }
+  function row(r) {
+    var li = document.createElement("li");
+    if (r.rank <= 3) li.className = "top" + r.rank;
+    var rank = document.createElement("b");
+    rank.className = "board-rank";
+    rank.textContent = r.rank;
+    var who = document.createElement("span");
+    who.className = "board-who";
+    var pic = document.createElement(r.avatar ? "img" : "i");
+    pic.className = "board-pic";
+    if (r.avatar) { pic.src = r.avatar; pic.alt = ""; pic.loading = "lazy"; pic.width = 36; pic.height = 36; }
+    else pic.textContent = (r.name || "?").slice(0, 1).toUpperCase();
+    var name = document.createElement("span");
+    name.className = "board-name";
+    name.textContent = r.name;
+    who.append(pic, name);
+    var count = document.createElement("span");
+    count.className = "board-count";
+    count.textContent = r.clips + " " + (de() ? (r.clips === 1 ? "Clip" : "Clips") : r.clips === 1 ? "clip" : "clips");
+    li.append(rank, who, count);
+    return li;
+  }
+  function empty(en, deText) {
+    var li = document.createElement("li");
+    li.className = "board-empty";
+    li.textContent = de() ? deText : en;
+    list.replaceChildren(li);
+  }
+  function load() {
+    fetch("cloud/api/leaderboard", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.board || d.board.length === 0) return empty("Nobody yet. Sign in to Klip and save the first clip.", "Noch niemand. Melde dich in Klip an und speichere den ersten Clip.");
+        list.replaceChildren.apply(list, d.board.slice(0, 25).map(row));
+      })
+      .catch(function () { empty("The leaderboard cannot be loaded right now.", "Die Rangliste lässt sich gerade nicht laden."); });
+  }
+  load();
+  window.klipBoardReload = load;
+})();
+
 // Language switch. English is in the markup, German sits in data attributes next to it.
 (function () {
   var nodes = document.querySelectorAll("[data-de],[data-de-html],[data-de-alt]");
@@ -255,6 +312,7 @@
     });
     document.documentElement.lang = lang;
     document.querySelectorAll(".lang button").forEach(function (b) { b.classList.toggle("on", b.dataset.lang === lang); });
+    if (window.klipBoardReload) window.klipBoardReload();
     try { localStorage.setItem("klip-site-lang", lang); } catch (e) {}
   }
   var saved = null;

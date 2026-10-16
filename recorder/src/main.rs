@@ -246,6 +246,8 @@ struct App {
     /// The automatic upload: the last error, and how many went up since the start.
     cloud_error: Mutex<Option<String>>,
     cloud_uploaded: AtomicU32,
+    /// Clips saved since the last report to the leaderboard of Klip Cloud.
+    clips_pending: AtomicU32,
     /// The game that is running right now.
     game: Mutex<Option<GameInfo>>,
     /// Games and unknown fullscreen programs running now, for the source chips of the panel.
@@ -484,6 +486,7 @@ fn run() -> Res<()> {
         hotkey_problems: Mutex::new(Vec::new()),
         cloud_error: Mutex::new(None),
         cloud_uploaded: AtomicU32::new(0),
+        clips_pending: AtomicU32::new(0),
         game: Mutex::new(None),
         running: Mutex::new(Vec::new()),
         picked: Mutex::new(None),
@@ -1116,6 +1119,8 @@ fn announce(app: &App, overlay: Option<&Overlay>, action: &HotkeyAction, was_rec
 
 /// Puts a saved clip at the top of the list the overlay panel shows.
 fn remember(app: &App, path: PathBuf, seconds: u32) {
+    // Counted for the leaderboard while signed in. Sent by the cloud thread.
+    app.clips_pending.fetch_add(1, Ordering::Relaxed);
     let t = unsafe { GetLocalTime() };
     let entry = ClipEntry {
         title: path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default(),
@@ -1407,6 +1412,16 @@ fn start_cloud_uploads(app: Arc<App>) {
     let started = std::time::SystemTime::now();
     let _ = std::thread::Builder::new().name("klip-cloud".into()).spawn(move || loop {
         std::thread::sleep(Duration::from_secs(15));
+        // The leaderboard: only how many clips were saved, never the clips.
+        let pending = app.clips_pending.swap(0, Ordering::Relaxed);
+        if pending > 0 {
+            if klip_cloud::account().is_none() {
+                // Clips made while signed out do not count.
+            } else if let Err(e) = klip_cloud::report_clips(pending) {
+                eprintln!("klip-recorder: leaderboard report failed: {e}");
+                app.clips_pending.fetch_add(pending, Ordering::Relaxed);
+            }
+        }
         let cfg = app.cfg.lock().unwrap().cloud.clone();
         if cfg.mode != klip_core::CloudMode::All || klip_cloud::account().is_none() {
             continue;
